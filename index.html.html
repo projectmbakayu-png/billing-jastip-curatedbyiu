@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Billing Jastip</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#f5f5f3;min-height:100vh}
+.shell{max-width:980px;margin:0 auto;padding:1.5rem 1rem}
+h1{font-size:18px;font-weight:500;margin-bottom:3px}
+.sub{font-size:13px;color:#666;margin-bottom:1.25rem}
+nav{display:flex;border-bottom:1px solid #ddd;margin-bottom:1.25rem;overflow-x:auto}
+.tab{font-size:13px;padding:9px 16px;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;color:#666;white-space:nowrap;flex-shrink:0;font-family:inherit}
+.tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:500}
+.page{display:none;flex-direction:column;gap:1rem}
+.page.active{display:flex}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.stat{background:#fff;border-radius:10px;border:0.5px solid #e0e0e0;padding:.75rem 1rem}
+.stat-lbl{font-size:11px;color:#888;margin-bottom:4px}
+.stat-val{font-size:20px;font-weight:500}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input,select,textarea{font-size:13px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:#888}
+.btn{font-size:13px;padding:6px 14px;border:1px solid #ccc;border-radius:8px;background:#fff;color:#1a1a1a;cursor:pointer;white-space:nowrap;font-family:inherit}
+.btn:hover{background:#f0f0ee}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn-green{border-color:#1D9E75;color:#0F6E56}.btn-green:hover{background:#E1F5EE}
+.btn-amber{border-color:#BA7517;color:#854F0B}.btn-amber:hover{background:#FAEEDA}
+.btn-blue{border-color:#378ADD;color:#185FA5}.btn-blue:hover{background:#E6F1FB}
+.btn-red{border-color:#E24B4A;color:#A32D2D}.btn-red:hover{background:#FCEBEB}
+.tbl-wrap{overflow-x:auto;border:1px solid #e0e0e0;border-radius:10px;background:#fff}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:600px}
+thead{background:#fafaf8}
+th{font-size:11px;color:#888;font-weight:500;padding:9px 12px;text-align:left;border-bottom:1px solid #eee}
+td{padding:9px 12px;border-bottom:1px solid #eee;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#fafaf8}
+.badge{display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px}
+.bl{background:#E1F5EE;color:#0F6E56}
+.bt{background:#E6F1FB;color:#185FA5}
+.bb{background:#FAEEDA;color:#854F0B}
+.aksi{display:flex;gap:5px;flex-wrap:wrap}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.42);display:none;align-items:center;justify-content:center;z-index:50;padding:1rem}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:12px;border:1px solid #ddd;padding:1.5rem;width:480px;max-width:100%;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:500;margin-bottom:1rem}
+.mrow{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;border-bottom:1px solid #eee}
+.mrow:last-of-type{border-bottom:none}
+.mfooter{display:flex;gap:8px;margin-top:1.25rem;justify-content:flex-end;flex-wrap:wrap}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem}
+.full{grid-column:1/-1}
+.flbl{font-size:12px;color:#888;margin-bottom:4px}
+.fi{width:100%;font-size:13px;padding:6px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;font-family:inherit}
+.fi:focus{border-color:#888;outline:none}
+.upload-zone{border:1.5px dashed #ccc;border-radius:10px;padding:2rem;text-align:center;cursor:pointer;color:#888;font-size:13px;background:#fff}
+.upload-zone:hover{background:#fafaf8}
+.info{font-size:12px;color:#555;background:#fafaf8;border-radius:8px;padding:.65rem .9rem;line-height:1.7;border:1px solid #eee}
+.info code{background:#e8e8e5;padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace}
+.pay-item{padding:10px 12px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:flex-start}
+.pay-item:last-child{border-bottom:none}
+.cust-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.cust-card{background:#fff;border:1px solid #eee;border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start}
+.empty{text-align:center;padding:3rem;color:#aaa;font-size:13px}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid #ddd;border-top-color:#666;border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:20px;right:20px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:9px 16px;font-size:13px;opacity:0;transition:opacity .3s;z-index:200;pointer-events:none;max-width:300px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.toast.show{opacity:1}
+.toast.ok{border-left:3px solid #1D9E75}
+.toast.err{border-left:3px solid #E24B4A}
+.suggest-box{position:relative;z-index:20;border:1px solid #ddd;border-radius:8px;background:#fff;display:none;max-height:150px;overflow-y:auto;margin-top:3px}
+.suggest-item{padding:8px 10px;cursor:pointer;border-bottom:1px solid #f0f0ee;font-size:13px}
+.suggest-item:last-child{border-bottom:none}
+.suggest-item:hover{background:#f5f5f3}
+.sisa-tag{font-size:11px;font-weight:500;padding:2px 7px;border-radius:999px;background:#FAEEDA;color:#854F0B;margin-left:6px}
+.lunas-tag{font-size:11px;font-weight:500;padding:2px 7px;border-radius:999px;background:#E1F5EE;color:#0F6E56;margin-left:6px}
+.loading-bar{text-align:center;padding:2rem;color:#888;font-size:13px}
+@media(max-width:580px){.stats{grid-template-columns:repeat(2,1fr)}.fg{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <h1>Billing Jastip</h1>
+  <p class="sub">Kelola tagihan, pembayaran & pelanggan — tersimpan di cloud</p>
+  <nav>
+    <button class="tab active" onclick="switchTab('orders')">Pesanan</button>
+    <button class="tab" onclick="switchTab('payments')">Input Pembayaran</button>
+    <button class="tab" onclick="switchTab('customers')">Pelanggan</button>
+    <button class="tab" onclick="switchTab('history')">Histori Tagihan</button>
+    <button class="tab" onclick="switchTab('import')">Import / Export</button>
+    <button class="tab" onclick="switchTab('settings')">Pengaturan</button>
+  </nav>
+
+  <!-- PESANAN -->
+  <div id="tab-orders" class="page active">
+    <div class="stats">
+      <div class="stat"><div class="stat-lbl">Total order</div><div class="stat-val" id="s-tot">—</div></div>
+      <div class="stat"><div class="stat-lbl">Belum ditagih</div><div class="stat-val" style="color:#854F0B" id="s-belum">—</div></div>
+      <div class="stat"><div class="stat-lbl">Menunggu bayar</div><div class="stat-val" style="color:#185FA5" id="s-tagih">—</div></div>
+      <div class="stat"><div class="stat-lbl">Lunas</div><div class="stat-val" style="color:#0F6E56" id="s-lunas">—</div></div>
+    </div>
+    <div class="toolbar">
+      <select id="f-status" onchange="loadOrders()">
+        <option value="">Semua status</option>
+        <option value="BELUM LUNAS">Belum lunas</option>
+        <option value="TAGIHAN DIKIRIM">Tagihan dikirim</option>
+        <option value="LUNAS">Lunas</option>
+      </select>
+      <input id="f-q" type="text" placeholder="Cari order / nama / produk..." style="width:210px" oninput="loadOrders()">
+      <button class="btn btn-blue" onclick="openAdd()">+ Tambah order</button>
+      <button class="btn" onclick="loadOrders()">Refresh</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Order ID</th><th>Pelanggan</th><th>Produk</th><th>Total</th><th>Dibayar</th><th>Sisa</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody id="orders-tbody"><tr><td colspan="8" class="loading-bar"><span class="spinner"></span>Memuat data...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- INPUT PEMBAYARAN -->
+  <div id="tab-payments" class="page">
+    <div class="info">Catat pembayaran yang masuk per order. Sisa tagihan akan otomatis berkurang. Jika sisa = 0, status order otomatis <strong>LUNAS</strong>.</div>
+    <div style="background:#fff;border:1px solid #eee;border-radius:10px;padding:1.25rem;max-width:480px">
+      <div class="fg">
+        <div class="full">
+          <div class="flbl">Order ID</div>
+          <input class="fi" id="pay-order-id" placeholder="ORD-001 atau ketik nama..." oninput="searchOrderForPay()" autocomplete="off">
+          <div class="suggest-box" id="pay-suggest"></div>
+        </div>
+        <div class="full" id="pay-order-info" style="display:none;background:#fafaf8;border:1px solid #eee;border-radius:8px;padding:10px;font-size:13px"></div>
+        <div>
+          <div class="flbl">Jumlah pembayaran (Rp)</div>
+          <input class="fi" id="pay-jumlah" type="number" min="0" placeholder="150000">
+        </div>
+        <div>
+          <div class="flbl">Metode</div>
+          <select class="fi" id="pay-metode">
+            <option>Transfer BCA</option>
+            <option>QRIS</option>
+            <option>Transfer BRI</option>
+            <option>Transfer Mandiri</option>
+            <option>Cash</option>
+            <option>Lainnya</option>
+          </select>
+        </div>
+        <div class="full">
+          <div class="flbl">Catatan (opsional)</div>
+          <input class="fi" id="pay-catatan" placeholder="DP pertama, pelunasan, dsb...">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-green" onclick="savePayment()">Simpan pembayaran</button>
+        <button class="btn" onclick="clearPayForm()">Reset</button>
+      </div>
+    </div>
+    <div style="margin-top:.5rem">
+      <div style="font-size:13px;font-weight:500;margin-bottom:.75rem">Riwayat pembayaran terbaru</div>
+      <div class="tbl-wrap">
+        <table>
+          <thead><tr><th>Order ID</th><th>Pelanggan</th><th>Jumlah</th><th>Metode</th><th>Catatan</th><th>Waktu</th><th>Aksi</th></tr></thead>
+          <tbody id="pay-tbody"><tr><td colspan="7" class="loading-bar"><span class="spinner"></span>Memuat...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PELANGGAN -->
+  <div id="tab-customers" class="page">
+    <div class="toolbar">
+      <input id="cq" type="text" placeholder="Cari nama / no HP..." style="width:220px" oninput="loadCustomers()">
+      <button class="btn btn-blue" onclick="openAddCustomer()">+ Tambah pelanggan</button>
+    </div>
+    <div id="cust-grid" class="cust-grid"></div>
+    <div id="cust-empty" class="empty" style="display:none">Belum ada data pelanggan.</div>
+  </div>
+
+  <!-- HISTORI TAGIHAN -->
+  <div id="tab-history" class="page">
+    <div class="toolbar">
+      <input id="h-q" type="text" placeholder="Cari histori..." style="width:220px" oninput="loadHistory()">
+    </div>
+    <div class="tbl-wrap">
+      <div id="hist-list" style="background:#fff"></div>
+      <div id="hist-empty" class="empty" style="display:none">Belum ada histori tagihan.</div>
+    </div>
+  </div>
+
+  <!-- IMPORT/EXPORT -->
+  <div id="tab-import" class="page">
+    <div class="info">
+      <strong>Format CSV (7 kolom):</strong><br>
+      <code>chat_id</code> · <code>order_id</code> · <code>nama_produk</code> · <code>qty</code> · <code>harga</code> · <code>fee_jastip</code> · <code>status</code><br><br>
+      Upload CSV baru → order yang sama (order_id sama) akan diperbarui itemnya. <strong>Sisa tagihan = total baru − pembayaran yang sudah tercatat.</strong>
+    </div>
+    <div class="upload-zone" onclick="document.getElementById('csv-input').click()">
+      Klik untuk upload file CSV dari Google Sheets
+      <div style="font-size:12px;color:#bbb;margin-top:6px">File → Download → Comma Separated Values (.csv)</div>
+      <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="handleCSV(this)">
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-green" onclick="exportCSV()">Ekspor semua ke CSV</button>
+      <button class="btn btn-amber" onclick="exportLunas()">Ekspor hanya LUNAS</button>
+      <button class="btn" onclick="exportTemplate()">Download template CSV</button>
+    </div>
+    <div id="import-log" class="info" style="display:none;white-space:pre-wrap;font-family:monospace;font-size:12px"></div>
+  </div>
+
+  <!-- PENGATURAN -->
+  <div id="tab-settings" class="page">
+    <div style="max-width:420px;display:flex;flex-direction:column;gap:12px">
+      <div><div class="flbl">Nama rekening (a.n)</div><input class="fi" id="cfg-nama" value="Ayu Tarviana Dewi"></div>
+      <div><div class="flbl">No. rekening BCA</div><input class="fi" id="cfg-rek" value="1010785517"></div>
+      <div><div class="flbl">Pesan pembuka tagihan</div><textarea class="fi" id="cfg-salam" rows="3">Halo kak 👋
+
+Berikut rincian tagihan pesanan kakak:</textarea></div>
+      <div><div class="flbl">Catatan penutup</div><textarea class="fi" id="cfg-catatan" rows="2">Terima kasih ☺️🙏🏻</textarea></div>
+      <button class="btn btn-green" onclick="saveSettings()">Simpan pengaturan</button>
+      <button class="btn" onclick="previewCfg()">Lihat preview pesan</button>
+      <div id="cfg-preview" style="display:none">
+        <div class="flbl" style="margin-bottom:4px">Preview</div>
+        <pre id="cfg-preview-text" style="font-size:12px;background:#fafaf8;border:1px solid #eee;border-radius:8px;padding:10px;white-space:pre-wrap;font-family:system-ui;line-height:1.6;color:#444"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETAIL ORDER -->
+<div class="overlay" id="ov-detail">
+  <div class="modal">
+    <h3 id="det-title"></h3>
+    <div id="det-items"></div>
+    <div style="margin-top:10px;border-top:1px solid #eee;padding-top:10px">
+      <div class="mrow"><span style="color:#888">Total order</span><span id="det-total-order" style="font-weight:500"></span></div>
+      <div class="mrow"><span style="color:#0F6E56">Sudah dibayar</span><span id="det-sudah" style="color:#0F6E56;font-weight:500"></span></div>
+      <div class="mrow"><span style="color:#854F0B;font-weight:500">Sisa tagihan</span><span id="det-sisa" style="color:#854F0B;font-weight:500;font-size:15px"></span></div>
+    </div>
+    <div id="det-pay-history" style="margin-top:12px;display:none">
+      <div class="flbl" style="margin-bottom:6px">Riwayat pembayaran</div>
+      <div id="det-pay-list"></div>
+    </div>
+    <div id="det-pesan-wrap" style="margin-top:12px;display:none">
+      <div class="flbl" style="margin-bottom:4px">Preview pesan WhatsApp</div>
+      <pre id="det-pesan" style="font-size:12px;background:#fafaf8;border:1px solid #eee;border-radius:8px;padding:10px;white-space:pre-wrap;max-height:160px;overflow:auto;font-family:system-ui;line-height:1.6"></pre>
+    </div>
+    <div class="mfooter">
+      <button class="btn" onclick="closeOv('ov-detail')">Tutup</button>
+      <button class="btn btn-red" id="det-del">Hapus</button>
+      <button class="btn" id="det-copy">Salin pesan WA</button>
+      <button class="btn btn-blue" id="det-pay-btn">+ Catat bayar</button>
+      <button class="btn btn-amber" id="det-tagih">Kirim tagihan</button>
+      <button class="btn btn-green" id="det-lunas">Tandai lunas</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TAMBAH ORDER -->
+<div class="overlay" id="ov-add">
+  <div class="modal">
+    <h3>Tambah order baru</h3>
+    <div class="fg">
+      <div class="full">
+        <div class="flbl">No. HP / Chat ID WA</div>
+        <input class="fi" id="a-chat" placeholder="628123..." oninput="autofillCustomer()" autocomplete="off">
+        <div class="suggest-box" id="a-suggest"></div>
+      </div>
+      <div class="full"><div class="flbl">Nama pelanggan</div><input class="fi" id="a-nama" placeholder="Kak Rina"></div>
+      <div class="full"><div class="flbl">Nama produk</div><input class="fi" id="a-produk" placeholder="Tas kulit..."></div>
+      <div><div class="flbl">Qty</div><input class="fi" id="a-qty" type="number" min="1" value="1"></div>
+      <div><div class="flbl">Harga (Rp)</div><input class="fi" id="a-harga" type="number" min="0" placeholder="150000"></div>
+      <div><div class="flbl">Fee jastip (Rp)</div><input class="fi" id="a-fee" type="number" min="0" value="0"></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn" onclick="closeOv('ov-add')">Batal</button>
+      <button class="btn btn-blue" onclick="saveOrder()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PELANGGAN -->
+<div class="overlay" id="ov-cust">
+  <div class="modal">
+    <h3 id="cust-modal-title">Tambah pelanggan</h3>
+    <div class="fg">
+      <div class="full"><div class="flbl">Nama lengkap</div><input class="fi" id="c-nama" placeholder="Kak Rina"></div>
+      <div><div class="flbl">No. HP / Chat ID WA</div><input class="fi" id="c-hp" placeholder="628123..."></div>
+      <div><div class="flbl">Kota</div><input class="fi" id="c-kota" placeholder="Surabaya"></div>
+      <div class="full"><div class="flbl">Catatan</div><input class="fi" id="c-note" placeholder="Ukuran, preferensi..."></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn" onclick="closeOv('ov-cust')">Batal</button>
+      <button class="btn btn-blue" id="cust-save-btn" onclick="saveCustomer()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// SUPABASE CONFIG
+// ══════════════════════════════════════════
+const SB_URL  = 'https://cygstxxdtvcjerkzrona.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5Z3N0eHhkdHZjamVya3pyb25hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDg2NDYsImV4cCI6MjA5NTMyNDY0Nn0.7H09H9l4AzZxE4qC5lFTT_rPbqjawrdHY3wapKSguOs';
+const HEADERS = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
+
+// ══════════════════════════════════════════
+// SUPABASE HELPERS
+// ══════════════════════════════════════════
+async function sbGet(table, params=''){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${params}`,{headers:HEADERS});
+  if(!r.ok)throw new Error(await r.text());
+  return r.json();
+}
+async function sbPost(table, body){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:HEADERS,body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(await r.text());
+  return r.json();
+}
+async function sbPatch(table, match, body){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${match}`,{method:'PATCH',headers:{...HEADERS,'Prefer':'return=representation'},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(await r.text());
+  return r.json();
+}
+async function sbDelete(table, match){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?${match}`,{method:'DELETE',headers:HEADERS});
+  if(!r.ok)throw new Error(await r.text());
+}
+async function sbUpsert(table, body){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:{...HEADERS,'Prefer':'resolution=merge-duplicates,return=representation'},body:JSON.stringify(body)});
+  if(!r.ok)throw new Error(await r.text());
+  return r.json();
+}
+
+// ══════════════════════════════════════════
+// CONFIG (localStorage untuk pengaturan)
+// ══════════════════════════════════════════
+const CK='bj_cfg_v5';
+function loadC(){try{return JSON.parse(localStorage.getItem(CK))||dfltCfg()}catch{return dfltCfg()}}
+function saveC(c){localStorage.setItem(CK,JSON.stringify(c))}
+function dfltCfg(){return{nama:'Ayu Tarviana Dewi',rek:'1010785517',salam:'Halo kak 👋\n\nBerikut rincian tagihan pesanan kakak:',catatan:'Terima kasih ☺️🙏🏻'}}
+let cfg=loadC();
+let editCustHp=null;
+let currentDetailId=null;
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+const fmt=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
+const esc=s=>String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+function toast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast show '+type;
+  clearTimeout(t._t);t._t=setTimeout(()=>{t.className='toast'},3200);
+}
+
+function normaliseHP(raw){
+  if(!raw)return null;
+  let hp=String(raw).trim().replace(/\D/g,'');
+  if(!hp||hp.length<6)return null;
+  if(hp.startsWith('0'))hp='62'+hp.slice(1);
+  if(!hp.startsWith('62'))hp='62'+hp;
+  if(hp.length<10||hp.length>15)return null;
+  return hp;
+}
+
+function parseCSVLine(line){
+  const res=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"')inQ=!inQ;
+    else if(c===','&&!inQ){res.push(cur.trim());cur='';}
+    else cur+=c;
+  }
+  res.push(cur.trim());
+  return res;
+}
+
+function normaliseStatus(raw){
+  if(!raw)return'BELUM LUNAS';
+  const s=raw.trim().toUpperCase();
+  if(s==='LUNAS')return'LUNAS';
+  if(s.includes('TAGIHAN')||s.includes('DIKIRIM'))return'TAGIHAN DIKIRIM';
+  return'BELUM LUNAS';
+}
+
+function calcTotalOrder(items){
+  return(items||[]).reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
+}
+
+// ══════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════
+function switchTab(id){
+  const IDS=['orders','payments','customers','history','import','settings'];
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',IDS[i]===id));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('tab-'+id).classList.add('active');
+  if(id==='orders')loadOrders();
+  if(id==='payments'){loadPayments();loadOrdersForPaySuggest();}
+  if(id==='customers')loadCustomers();
+  if(id==='history')loadHistory();
+  if(id==='settings')loadCfgForm();
+}
+
+// ══════════════════════════════════════════
+// ORDERS
+// ══════════════════════════════════════════
+let allOrders=[];
+
+async function loadOrders(){
+  const tbody=document.getElementById('orders-tbody');
+  tbody.innerHTML=`<tr><td colspan="8" class="loading-bar"><span class="spinner"></span>Memuat data...</td></tr>`;
+  try{
+    const fs=document.getElementById('f-status').value;
+    const q=(document.getElementById('f-q').value||'').toLowerCase();
+    let params='order=created_at.desc&limit=500';
+    if(fs)params+=`&status=eq.${encodeURIComponent(fs)}`;
+    allOrders=await sbGet('orders',params);
+
+    // Ambil total pembayaran per order
+    const pays=await sbGet('payments','select=order_id,jumlah');
+    const payMap={};
+    pays.forEach(p=>{
+      payMap[p.order_id]=(payMap[p.order_id]||0)+Number(p.jumlah);
+    });
+
+    let rows=allOrders;
+    if(q)rows=rows.filter(o=>
+      o.order_id.toLowerCase().includes(q)||
+      o.nama_pelanggan.toLowerCase().includes(q)||
+      o.chat_id.toLowerCase().includes(q)||
+      (o.items||[]).some(it=>it.nama_produk.toLowerCase().includes(q))
+    );
+
+    updateStats(allOrders);
+
+    if(!rows.length){tbody.innerHTML=`<tr><td colspan="8" class="empty">Tidak ada data.</td></tr>`;return}
+
+    tbody.innerHTML=rows.map(o=>{
+      const totalOrder=o.total_order||calcTotalOrder(o.items);
+      const dibayar=payMap[o.order_id]||0;
+      const sisa=Math.max(0,totalOrder-dibayar);
+      const isL=o.status==='LUNAS';
+      const bc=isL?'bl':o.status==='TAGIHAN DIKIRIM'?'bt':'bb';
+      const hpValid=normaliseHP(o.chat_id);
+      const prods=(o.items||[]).map(it=>`<div>${it.nama_produk}<span style="color:#bbb"> ×${it.qty}</span></div>`).join('');
+      const aksi=isL
+        ?`<button class="btn" onclick="openDetail('${esc(o.order_id)}')">Detail</button>`
+        :(!hpValid
+          ?`<span style="font-size:12px;color:#A32D2D">No HP ⚠</span>
+            <button class="btn" onclick="openDetail('${esc(o.order_id)}')">Detail</button>`
+          :`<button class="btn btn-amber" onclick="doTagih('${esc(o.order_id)}')">Tagih</button>
+            <button class="btn btn-green" onclick="doLunas('${esc(o.order_id)}')">Lunas</button>
+            <button class="btn" onclick="openDetail('${esc(o.order_id)}')">Detail</button>`
+        );
+      return`<tr>
+        <td style="font-family:monospace;font-size:12px">${o.order_id}</td>
+        <td><div style="font-weight:500">${o.nama_pelanggan}</div><div style="font-size:11px;color:#888">${o.chat_id||'—'}</div></td>
+        <td>${prods}</td>
+        <td>${fmt(totalOrder)}</td>
+        <td style="color:#0F6E56">${dibayar>0?fmt(dibayar):'—'}</td>
+        <td style="font-weight:500;color:${sisa>0&&!isL?'#854F0B':'#888'}">${isL?'<span style="color:#0F6E56">Lunas</span>':fmt(sisa)}</td>
+        <td><span class="badge ${bc}">${o.status}</span></td>
+        <td><div class="aksi">${aksi}</div></td>
+      </tr>`;
+    }).join('');
+  }catch(e){
+    tbody.innerHTML=`<tr><td colspan="8" class="empty">Gagal memuat: ${e.message}</td></tr>`;
+    toast('Gagal memuat order: '+e.message,'err');
+  }
+}
+
+function updateStats(ords){
+  document.getElementById('s-tot').textContent=ords.length;
+  document.getElementById('s-belum').textContent=ords.filter(o=>o.status==='BELUM LUNAS').length;
+  document.getElementById('s-tagih').textContent=ords.filter(o=>o.status==='TAGIHAN DIKIRIM').length;
+  document.getElementById('s-lunas').textContent=ords.filter(o=>o.status==='LUNAS').length;
+}
+
+// ══════════════════════════════════════════
+// DETAIL ORDER
+// ══════════════════════════════════════════
+async function openDetail(id){
+  currentDetailId=id;
+  document.getElementById('ov-detail').classList.add('open');
+  document.getElementById('det-title').textContent=id+' — memuat...';
+  document.getElementById('det-items').innerHTML='<div class="loading-bar"><span class="spinner"></span>Memuat...</div>';
+
+  try{
+    const [orders,pays]=await Promise.all([
+      sbGet('orders',`order_id=eq.${id}`),
+      sbGet('payments',`order_id=eq.${id}&order=created_at.asc`)
+    ]);
+    const o=orders[0];if(!o)return;
+
+    document.getElementById('det-title').textContent=`${o.order_id} — ${o.nama_pelanggan}`;
+    document.getElementById('det-items').innerHTML=(o.items||[]).map(it=>`
+      <div class="mrow">
+        <span>${it.nama_produk} <span style="color:#aaa">×${it.qty}</span></span>
+        <span>${fmt(it.qty*(it.harga+(it.fee_jastip||0)))}</span>
+      </div>`).join('');
+
+    const totalOrder=o.total_order||calcTotalOrder(o.items);
+    const dibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+    const sisa=Math.max(0,totalOrder-dibayar);
+
+    document.getElementById('det-total-order').textContent=fmt(totalOrder);
+    document.getElementById('det-sudah').textContent=fmt(dibayar);
+    document.getElementById('det-sisa').textContent=fmt(sisa);
+
+    // Riwayat pembayaran
+    const phWrap=document.getElementById('det-pay-history');
+    const phList=document.getElementById('det-pay-list');
+    if(pays.length){
+      phWrap.style.display='block';
+      phList.innerHTML=pays.map(p=>`
+        <div class="pay-item">
+          <div>
+            <div style="font-weight:500">${fmt(p.jumlah)}</div>
+            <div style="font-size:11px;color:#888">${p.metode}${p.catatan?' · '+p.catatan:''} · ${new Date(p.created_at).toLocaleString('id-ID')}</div>
+          </div>
+          <button class="btn btn-red" style="font-size:12px;padding:3px 9px" onclick="deletePayment('${p.id}','${id}')">Hapus</button>
+        </div>`).join('');
+    } else {
+      phWrap.style.display='none';
+    }
+
+    const isL=o.status==='LUNAS';
+    const pw=document.getElementById('det-pesan-wrap');
+    pw.style.display=isL?'none':'block';
+    if(!isL){
+      const pesan=buildPesan(o,sisa,dibayar,totalOrder);
+      document.getElementById('det-pesan').textContent=pesan;
+      document.getElementById('det-copy').onclick=()=>copyText(pesan,document.getElementById('det-copy'));
+    }
+
+    document.getElementById('det-tagih').disabled=isL;
+    document.getElementById('det-lunas').disabled=isL;
+    document.getElementById('det-pay-btn').onclick=()=>{closeOv('ov-detail');quickPayFor(id,o.nama_pelanggan,sisa)};
+    document.getElementById('det-tagih').onclick=()=>{closeOv('ov-detail');doTagih(id)};
+    document.getElementById('det-lunas').onclick=()=>{doLunas(id);closeOv('ov-detail')};
+    document.getElementById('det-del').onclick=()=>deleteOrder(id);
+  }catch(e){
+    toast('Gagal memuat detail: '+e.message,'err');
+  }
+}
+
+// ══════════════════════════════════════════
+// BUILD PESAN WA
+// ══════════════════════════════════════════
+function buildPesan(o, sisa, dibayar, totalOrder){
+  const c=cfg;
+  const items=o.items||[];
+  const belum=items.filter(it=>!it.lunas);
+  const tampil=belum.length>0?belum:items;
+
+  const lines=tampil.map(it=>{
+    const satuan=it.harga+(it.fee_jastip||0);
+    return`${it.nama_produk}\n${fmt(satuan)} x ${it.qty}`;
+  }).join('\n\n');
+
+  let totalLine='';
+  if(dibayar>0&&sisa>0){
+    totalLine=`Total: ${fmt(totalOrder)}\nSudah dibayar: ${fmt(dibayar)}\nSisa pembayaran: ${fmt(sisa)}`;
+  } else {
+    totalLine=`Total: ${fmt(sisa||totalOrder)}`;
+  }
+
+  return`${c.salam}\n\n${lines}\n\n${totalLine}\n\nTransfer ke:\n💳 BCA ${c.rek} a.n ${c.nama}\n\n${c.catatan}`;
+}
+
+// ══════════════════════════════════════════
+// ACTIONS
+// ══════════════════════════════════════════
+async function doTagih(id){
+  try{
+    const [orders,pays]=await Promise.all([
+      sbGet('orders',`order_id=eq.${id}`),
+      sbGet('payments',`order_id=eq.${id}`)
+    ]);
+    const o=orders[0];
+    if(!o||o.status==='LUNAS')return;
+
+    const hp=normaliseHP(o.chat_id);
+    if(!hp){toast('No HP kosong atau tidak valid','err');return}
+
+    const totalOrder=o.total_order||calcTotalOrder(o.items);
+    const dibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+    const sisa=Math.max(0,totalOrder-dibayar);
+    const pesan=buildPesan(o,sisa,dibayar,totalOrder);
+
+    window.open('https://wa.me/'+hp+'?text='+encodeURIComponent(pesan),'_blank');
+
+    await sbPatch('orders',`order_id=eq.${id}`,{status:'TAGIHAN DIKIRIM',updated_at:new Date().toISOString()});
+    await sbPost('tagihan_history',{order_id:id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:sisa,aksi:'TAGIHAN DIKIRIM',pesan});
+
+    toast(`WA terbuka → ${o.nama_pelanggan}`);
+    loadOrders();
+  }catch(e){toast('Gagal: '+e.message,'err')}
+}
+
+async function doLunas(id){
+  try{
+    await sbPatch('orders',`order_id=eq.${id}`,{status:'LUNAS',updated_at:new Date().toISOString()});
+    await sbPost('tagihan_history',{order_id:id,aksi:'LUNAS',total:0,pelanggan:'',chat_id:''});
+    toast(`Order ${id} lunas ✓`);
+    loadOrders();
+  }catch(e){toast('Gagal: '+e.message,'err')}
+}
+
+async function deleteOrder(id){
+  if(!confirm(`Hapus order ${id}?`))return;
+  try{
+    await sbDelete('orders',`order_id=eq.${id}`);
+    closeOv('ov-detail');
+    toast(`Order ${id} dihapus`);
+    loadOrders();
+  }catch(e){toast('Gagal hapus: '+e.message,'err')}
+}
+
+// ══════════════════════════════════════════
+// ADD ORDER
+// ══════════════════════════════════════════
+function openAdd(){document.getElementById('ov-add').classList.add('open')}
+function closeOv(id){document.getElementById(id).classList.remove('open')}
+
+async function autofillCustomer(){
+  const val=document.getElementById('a-chat').value.trim().toLowerCase();
+  const sug=document.getElementById('a-suggest');
+  if(!val||val.length<2){sug.style.display='none';return}
+  try{
+    const custs=await sbGet('customers',`or=(hp.ilike.*${val}*,nama.ilike.*${val}*)&limit=5`);
+    if(!custs.length){sug.style.display='none';return}
+    sug.style.display='block';
+    sug.innerHTML=custs.map(p=>`
+      <div class="suggest-item" onclick="fillCustomer('${esc(p.hp)}','${esc(p.nama)}')">
+        <span style="font-weight:500">${p.nama}</span>
+        <span style="color:#888;font-size:12px;margin-left:6px">${p.hp}</span>
+        ${p.kota?`<span style="color:#bbb;font-size:11px;margin-left:4px">· ${p.kota}</span>`:''}
+      </div>`).join('');
+  }catch{}
+}
+
+function fillCustomer(hp,nama){
+  document.getElementById('a-chat').value=hp;
+  document.getElementById('a-nama').value=nama;
+  document.getElementById('a-suggest').style.display='none';
+}
+
+async function saveOrder(){
+  const chat=document.getElementById('a-chat').value.trim();
+  const nama=document.getElementById('a-nama').value.trim();
+  const produk=document.getElementById('a-produk').value.trim();
+  const qty=parseInt(document.getElementById('a-qty').value)||1;
+  const harga=parseInt(document.getElementById('a-harga').value)||0;
+  const fee=parseInt(document.getElementById('a-fee').value)||0;
+  if(!chat||!nama||!produk||!harga){toast('Lengkapi semua field wajib','err');return}
+
+  const items=[{nama_produk:produk,qty,harga,fee_jastip:fee}];
+  const total=calcTotalOrder(items);
+
+  // Generate order_id
+  const existing=await sbGet('orders','select=order_id&order=created_at.desc&limit=1');
+  let nextNum=1;
+  if(existing.length){
+    const m=existing[0].order_id.match(/(\d+)$/);
+    if(m)nextNum=parseInt(m[1])+1;
+  }
+  const order_id=`ORD-${String(nextNum).padStart(3,'0')}`;
+
+  try{
+    await sbPost('orders',{order_id,chat_id:chat,nama_pelanggan:nama,status:'BELUM LUNAS',items,total_order:total});
+    // Auto-register pelanggan
+    await sbUpsert('customers',{hp:chat,nama,kota:'',note:''});
+    closeOv('ov-add');
+    ['a-chat','a-nama','a-produk','a-harga'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('a-qty').value='1';document.getElementById('a-fee').value='0';
+    document.getElementById('a-suggest').style.display='none';
+    toast(`Order ${order_id} ditambahkan`);
+    loadOrders();
+  }catch(e){toast('Gagal simpan: '+e.message,'err')}
+}
+
+// ══════════════════════════════════════════
+// PAYMENTS
+// ══════════════════════════════════════════
+let ordersForPay=[];
+
+async function loadOrdersForPaySuggest(){
+  try{ordersForPay=await sbGet('orders','select=order_id,nama_pelanggan,total_order,status&order=created_at.desc&limit=500')}catch{}
+}
+
+async function loadPayments(){
+  const tbody=document.getElementById('pay-tbody');
+  tbody.innerHTML=`<tr><td colspan="7" class="loading-bar"><span class="spinner"></span>Memuat...</td></tr>`;
+  try{
+    const pays=await sbGet('payments','order=created_at.desc&limit=100');
+    if(!pays.length){tbody.innerHTML=`<tr><td colspan="7" class="empty">Belum ada pembayaran.</td></tr>`;return}
+    // Ambil nama pelanggan
+    const orderIds=[...new Set(pays.map(p=>p.order_id))];
+    const ords=await sbGet('orders',`order_id=in.(${orderIds.map(id=>`"${id}"`).join(',')})&select=order_id,nama_pelanggan`);
+    const ordMap={};ords.forEach(o=>ordMap[o.order_id]=o.nama_pelanggan);
+
+    tbody.innerHTML=pays.map(p=>`<tr>
+      <td style="font-family:monospace;font-size:12px">${p.order_id}</td>
+      <td>${ordMap[p.order_id]||'—'}</td>
+      <td style="font-weight:500;color:#0F6E56">${fmt(p.jumlah)}</td>
+      <td>${p.metode||'—'}</td>
+      <td>${p.catatan||'—'}</td>
+      <td style="font-size:12px;color:#888">${new Date(p.created_at).toLocaleString('id-ID')}</td>
+      <td><button class="btn btn-red" style="font-size:12px;padding:3px 9px" onclick="deletePayment('${p.id}','${p.order_id}')">Hapus</button></td>
+    </tr>`).join('');
+  }catch(e){tbody.innerHTML=`<tr><td colspan="7" class="empty">Gagal: ${e.message}</td></tr>`}
+}
+
+async function searchOrderForPay(){
+  const val=document.getElementById('pay-order-id').value.trim().toLowerCase();
+  const sug=document.getElementById('pay-suggest');
+  document.getElementById('pay-order-info').style.display='none';
+  if(!val||val.length<1){sug.style.display='none';return}
+  const matches=ordersForPay.filter(o=>
+    o.order_id.toLowerCase().includes(val)||
+    o.nama_pelanggan.toLowerCase().includes(val)
+  ).slice(0,6);
+  if(!matches.length){sug.style.display='none';return}
+  sug.style.display='block';
+  sug.innerHTML=matches.map(o=>`
+    <div class="suggest-item" onclick="selectOrderForPay('${esc(o.order_id)}')">
+      <span style="font-family:monospace;font-size:12px">${o.order_id}</span>
+      <span style="margin-left:8px;font-weight:500">${o.nama_pelanggan}</span>
+      <span class="badge ${o.status==='LUNAS'?'bl':o.status==='TAGIHAN DIKIRIM'?'bt':'bb'}" style="margin-left:6px">${o.status}</span>
+    </div>`).join('');
+}
+
+async function selectOrderForPay(id){
+  document.getElementById('pay-order-id').value=id;
+  document.getElementById('pay-suggest').style.display='none';
+  try{
+    const [orders,pays]=await Promise.all([
+      sbGet('orders',`order_id=eq.${id}`),
+      sbGet('payments',`order_id=eq.${id}`)
+    ]);
+    const o=orders[0];if(!o)return;
+    const totalOrder=o.total_order||calcTotalOrder(o.items);
+    const dibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+    const sisa=Math.max(0,totalOrder-dibayar);
+    const info=document.getElementById('pay-order-info');
+    info.style.display='block';
+    info.innerHTML=`<strong>${o.nama_pelanggan}</strong> · ${id}<br>
+      Total: ${fmt(totalOrder)} &nbsp;·&nbsp; Dibayar: <span style="color:#0F6E56">${fmt(dibayar)}</span> &nbsp;·&nbsp; 
+      Sisa: <span style="color:#854F0B;font-weight:500">${fmt(sisa)}</span>`;
+    document.getElementById('pay-jumlah').value=sisa||'';
+  }catch{}
+}
+
+function quickPayFor(id,nama,sisa){
+  switchTab('payments');
+  document.getElementById('pay-order-id').value=id;
+  document.getElementById('pay-jumlah').value=sisa||'';
+  document.getElementById('pay-order-info').style.display='block';
+  document.getElementById('pay-order-info').innerHTML=`<strong>${nama}</strong> · ${id} &nbsp;·&nbsp; Sisa: <span style="color:#854F0B;font-weight:500">${fmt(sisa)}</span>`;
+}
+
+async function savePayment(){
+  const order_id=document.getElementById('pay-order-id').value.trim();
+  const jumlah=parseFloat(document.getElementById('pay-jumlah').value)||0;
+  const metode=document.getElementById('pay-metode').value;
+  const catatan=document.getElementById('pay-catatan').value.trim();
+  if(!order_id||!jumlah){toast('Order ID dan jumlah wajib diisi','err');return}
+
+  try{
+    // Cek order ada
+    const ords=await sbGet('orders',`order_id=eq.${order_id}`);
+    if(!ords.length){toast('Order ID tidak ditemukan','err');return}
+    const o=ords[0];
+
+    // Simpan pembayaran
+    await sbPost('payments',{order_id,jumlah,metode,catatan});
+
+    // Hitung total dibayar sekarang
+    const pays=await sbGet('payments',`order_id=eq.${order_id}`);
+    const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+    const totalOrder=o.total_order||calcTotalOrder(o.items);
+    const sisa=Math.max(0,totalOrder-totalDibayar);
+
+    // Auto lunas jika sisa = 0
+    if(sisa<=0&&o.status!=='LUNAS'){
+      await sbPatch('orders',`order_id=eq.${order_id}`,{status:'LUNAS',updated_at:new Date().toISOString()});
+      await sbPost('tagihan_history',{order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalOrder,aksi:'LUNAS (bayar lunas)',pesan:''});
+      toast(`✓ Pembayaran disimpan — Order ${order_id} otomatis LUNAS`);
+    } else {
+      toast(`✓ Pembayaran ${fmt(jumlah)} disimpan. Sisa: ${fmt(sisa)}`);
+    }
+
+    clearPayForm();
+    loadPayments();
+    loadOrders();
+  }catch(e){toast('Gagal simpan: '+e.message,'err')}
+}
+
+async function deletePayment(payId, orderId){
+  if(!confirm('Hapus catatan pembayaran ini?'))return;
+  try{
+    await sbDelete('payments',`id=eq.${payId}`);
+    // Cek ulang apakah masih lunas
+    const [ords,pays]=await Promise.all([
+      sbGet('orders',`order_id=eq.${orderId}`),
+      sbGet('payments',`order_id=eq.${orderId}`)
+    ]);
+    const o=ords[0];
+    if(o&&o.status==='LUNAS'){
+      const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+      const totalOrder=o.total_order||calcTotalOrder(o.items);
+      if(totalDibayar<totalOrder){
+        await sbPatch('orders',`order_id=eq.${orderId}`,{status:'BELUM LUNAS',updated_at:new Date().toISOString()});
+      }
+    }
+    toast('Pembayaran dihapus');
+    loadPayments();
+    loadOrders();
+    if(currentDetailId===orderId)openDetail(orderId);
+  }catch(e){toast('Gagal hapus: '+e.message,'err')}
+}
+
+function clearPayForm(){
+  document.getElementById('pay-order-id').value='';
+  document.getElementById('pay-jumlah').value='';
+  document.getElementById('pay-catatan').value='';
+  document.getElementById('pay-order-info').style.display='none';
+  document.getElementById('pay-suggest').style.display='none';
+}
+
+// ══════════════════════════════════════════
+// CUSTOMERS
+// ══════════════════════════════════════════
+async function loadCustomers(){
+  const q=(document.getElementById('cq').value||'').toLowerCase();
+  const grid=document.getElementById('cust-grid');
+  const em=document.getElementById('cust-empty');
+  grid.innerHTML='<div class="loading-bar"><span class="spinner"></span>Memuat...</div>';
+  try{
+    let params='order=created_at.desc';
+    if(q)params+=`&or=(hp.ilike.*${q}*,nama.ilike.*${q}*)`;
+    const custs=await sbGet('customers',params);
+    if(!custs.length){grid.innerHTML='';em.style.display='block';return}
+    em.style.display='none';
+    // Ambil jumlah order per pelanggan
+    const hps=custs.map(c=>`"${c.hp}"`).join(',');
+    const ords=await sbGet('orders',`chat_id=in.(${hps})&select=chat_id,total_order`);
+    const ordMap={};
+    ords.forEach(o=>{
+      if(!ordMap[o.chat_id])ordMap[o.chat_id]={count:0,total:0};
+      ordMap[o.chat_id].count++;
+      ordMap[o.chat_id].total+=Number(o.total_order||0);
+    });
+    grid.innerHTML=custs.map(p=>{
+      const stat=ordMap[p.hp]||{count:0,total:0};
+      return`<div class="cust-card">
+        <div style="flex:1">
+          <div style="font-weight:500;font-size:14px">${p.nama}</div>
+          <div style="font-size:12px;color:#888;margin-top:2px">${p.hp}${p.kota?' · '+p.kota:''}</div>
+          ${p.note?`<div style="font-size:12px;color:#888;margin-top:2px">${p.note}</div>`:''}
+          <div style="font-size:11px;color:#bbb;margin-top:4px">${stat.count} order · ${fmt(stat.total)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-left:10px;flex-shrink:0">
+          <button class="btn" style="font-size:12px;padding:4px 10px" onclick="openEditCustomer('${esc(p.hp)}')">Edit</button>
+          <button class="btn btn-red" style="font-size:12px;padding:4px 10px" onclick="deleteCustomer('${esc(p.hp)}')">Hapus</button>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){grid.innerHTML=`<div class="empty">Gagal: ${e.message}</div>`}
+}
+
+function openAddCustomer(){
+  editCustHp=null;
+  document.getElementById('cust-modal-title').textContent='Tambah pelanggan';
+  ['c-nama','c-hp','c-kota','c-note'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('ov-cust').classList.add('open');
+}
+
+async function openEditCustomer(hp){
+  try{
+    const custs=await sbGet('customers',`hp=eq.${encodeURIComponent(hp)}`);
+    const p=custs[0];if(!p)return;
+    editCustHp=hp;
+    document.getElementById('cust-modal-title').textContent='Edit pelanggan';
+    document.getElementById('c-nama').value=p.nama||'';
+    document.getElementById('c-hp').value=p.hp||'';
+    document.getElementById('c-kota').value=p.kota||'';
+    document.getElementById('c-note').value=p.note||'';
+    document.getElementById('ov-cust').classList.add('open');
+  }catch{}
+}
+
+async function saveCustomer(){
+  const nama=document.getElementById('c-nama').value.trim();
+  const hp=document.getElementById('c-hp').value.trim();
+  const kota=document.getElementById('c-kota').value.trim();
+  const note=document.getElementById('c-note').value.trim();
+  if(!nama||!hp){toast('Nama dan no HP wajib diisi','err');return}
+  try{
+    await sbUpsert('customers',{hp,nama,kota,note});
+    if(editCustHp&&hp!==editCustHp){
+      await sbPatch('orders',`chat_id=eq.${editCustHp}`,{chat_id:hp,nama_pelanggan:nama});
+      await sbDelete('customers',`hp=eq.${editCustHp}`);
+    }
+    toast(editCustHp?'Pelanggan diperbarui':'Pelanggan ditambahkan');
+    closeOv('ov-cust');loadCustomers();
+  }catch(e){toast('Gagal: '+e.message,'err')}
+}
+
+async function deleteCustomer(hp){
+  if(!confirm('Hapus pelanggan ini?'))return;
+  try{
+    await sbDelete('customers',`hp=eq.${encodeURIComponent(hp)}`);
+    toast('Pelanggan dihapus');loadCustomers();
+  }catch(e){toast('Gagal: '+e.message,'err')}
+}
+
+// ══════════════════════════════════════════
+// HISTORY
+// ══════════════════════════════════════════
+async function loadHistory(){
+  const q=(document.getElementById('h-q').value||'').toLowerCase();
+  const el=document.getElementById('hist-list');
+  const em=document.getElementById('hist-empty');
+  el.innerHTML='<div class="loading-bar"><span class="spinner"></span>Memuat...</div>';
+  try{
+    let params='order=created_at.desc&limit=200';
+    if(q)params+=`&or=(order_id.ilike.*${q}*,pelanggan.ilike.*${q}*,chat_id.ilike.*${q}*)`;
+    const hist=await sbGet('tagihan_history',params);
+    if(!hist.length){el.innerHTML='';em.style.display='block';return}
+    em.style.display='none';
+    el.innerHTML=hist.map(h=>{
+      const bc=String(h.aksi).includes('LUNAS')?'bl':h.aksi==='TAGIHAN DIKIRIM'?'bt':'bb';
+      return`<div style="padding:10px 12px;border-bottom:1px solid #eee">
+        <span style="font-family:monospace;font-size:12px">${h.order_id||'—'}</span>
+        <span style="margin-left:8px;font-weight:500">${h.pelanggan||''}</span>
+        <span class="badge ${bc}" style="margin-left:8px">${h.aksi}</span>
+        <div style="font-size:11px;color:#888;margin-top:3px">${new Date(h.created_at).toLocaleString('id-ID')}${h.total?` · ${fmt(h.total)}`:''}${h.chat_id?' · '+h.chat_id:''}</div>
+        ${h.pesan?`<pre style="margin-top:6px;font-size:11px;color:#666;white-space:pre-wrap;background:#fafaf8;padding:8px;border-radius:8px;max-height:80px;overflow:auto;border:1px solid #eee;font-family:system-ui">${h.pesan}</pre>`:''}
+      </div>`;
+    }).join('');
+  }catch(e){el.innerHTML=`<div class="empty">Gagal: ${e.message}</div>`}
+}
+
+// ══════════════════════════════════════════
+// CSV IMPORT — sisa = total baru - pembayaran lama
+// ══════════════════════════════════════════
+async function handleCSV(input){
+  const file=input.files[0];if(!file)return;
+  const logEl=document.getElementById('import-log');
+  logEl.style.display='block';logEl.textContent='Memproses CSV...';
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length<2){toast('CSV kosong','err');input.value='';return}
+    const dataLines=lines.slice(1);
+    const grouped={};
+    dataLines.forEach(line=>{
+      const p=parseCSVLine(line);
+      if(p.length<5)return;
+      const chat_id=p[0]||'',order_id=p[1]||'',nama_produk=p[2]||'';
+      const qty=parseFloat(p[3])||1,harga=parseFloat(p[4])||0,fee_jastip=parseFloat(p[5])||0;
+      const rawStatus=p[6]||'';
+      if(!order_id)return;
+      if(!grouped[order_id]){
+        grouped[order_id]={chat_id,order_id,nama_pelanggan:chat_id,status:normaliseStatus(rawStatus),items:[]};
+      }
+      grouped[order_id].items.push({nama_produk,qty,harga,fee_jastip});
+    });
+
+    const imported=Object.values(grouped);
+    let added=0,updated=0,lunasAuto=0;
+
+    for(const imp of imported){
+      const totalBaru=calcTotalOrder(imp.items);
+      try{
+        // Cek apakah order sudah ada
+        const existing=await sbGet('orders',`order_id=eq.${imp.order_id}`);
+        if(existing.length){
+          const o=existing[0];
+          // Ambil total pembayaran lama
+          const pays=await sbGet('payments',`order_id=eq.${imp.order_id}`);
+          const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+          const sisa=Math.max(0,totalBaru-totalDibayar);
+          // Tentukan status baru
+          let newStatus=sisa<=0?'LUNAS':normaliseStatus(imp.status);
+          if(sisa<=0&&o.status!=='LUNAS'){
+            lunasAuto++;
+            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalBaru,aksi:'LUNAS (import CSV)',pesan:''});
+          }
+          await sbPatch('orders',`order_id=eq.${imp.order_id}`,{
+            items:imp.items,total_order:totalBaru,status:newStatus,updated_at:new Date().toISOString()
+          });
+          updated++;
+        } else {
+          // Order baru
+          await sbPost('orders',{
+            order_id:imp.order_id,chat_id:imp.chat_id,nama_pelanggan:imp.chat_id,
+            status:imp.status,items:imp.items,total_order:totalBaru
+          });
+          // Auto-register pelanggan
+          await sbUpsert('customers',{hp:imp.chat_id,nama:imp.chat_id,kota:'',note:''});
+          added++;
+        }
+      }catch(e){console.error(imp.order_id,e)}
+    }
+
+    logEl.textContent=
+      `✅ Import selesai\n`+
+      `  + ${added} order baru\n`+
+      `  ↻ ${updated} order diperbarui\n`+
+      `  ✓ ${lunasAuto} otomatis LUNAS (sisa = 0)\n`+
+      `  Total baris: ${dataLines.length}`;
+    toast(`Import: ${added} baru, ${updated} diperbarui`);
+    input.value='';
+    loadOrders();
+  };
+  reader.readAsText(file);
+}
+
+// ══════════════════════════════════════════
+// CSV EXPORT
+// ══════════════════════════════════════════
+async function exportCSV(){
+  try{
+    const ords=await sbGet('orders','order=created_at.desc');
+    if(!ords.length){toast('Tidak ada data','err');return}
+    const pays=await sbGet('payments','select=order_id,jumlah');
+    const payMap={};pays.forEach(p=>{payMap[p.order_id]=(payMap[p.order_id]||0)+Number(p.jumlah)});
+    const hdr='chat_id,order_id,nama_produk,qty,harga,fee_jastip,status,total,dibayar,sisa\n';
+    const body=ords.flatMap(o=>(o.items||[]).map(it=>{
+      const total=o.total_order||calcTotalOrder(o.items);
+      const dibayar=payMap[o.order_id]||0;
+      const sisa=Math.max(0,total-dibayar);
+      return[o.chat_id,o.order_id,it.nama_produk,it.qty,it.harga,it.fee_jastip||0,o.status,total,dibayar,sisa].join(',');
+    })).join('\n');
+    dlCSV(hdr+body,'billing-semua.csv');toast('CSV diunduh');
+  }catch(e){toast('Gagal: '+e.message,'err')}
+}
+
+async function exportLunas(){
+  try{
+    const ords=await sbGet('orders','status=eq.LUNAS&order=created_at.desc');
+    if(!ords.length){toast('Belum ada yang lunas','err');return}
+    const hdr='chat_id,order_id,nama_produk,qty,harga,fee_jastip,status\n';
+    const body=ords.flatMap(o=>(o.items||[]).map(it=>[o.chat_id,o.order_id,it.nama_produk,it.qty,it.harga,it.fee_jastip||0,o.status].join(','))).join('\n');
+    dlCSV(hdr+body,'billing-lunas.csv');toast('CSV lunas diunduh');
+  }catch(e){toast('Gagal: '+e.message,'err')}
+}
+
+function exportTemplate(){
+  dlCSV(
+    'chat_id,order_id,nama_produk,qty,harga,fee_jastip,status\n'+
+    '628111000001,ORD-001,Tas Kulit,1,850000,50000,BELUM LUNAS\n'+
+    '628111000001,ORD-001,Dompet Kecil,2,120000,15000,BELUM LUNAS\n'+
+    '628111000002,ORD-002,Parfum 50ml,1,650000,75000,LUNAS\n',
+    'template-billing.csv'
+  );toast('Template diunduh');
+}
+
+function dlCSV(content,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:'text/csv'}));
+  a.download=name;a.click();
+}
+
+// ══════════════════════════════════════════
+// COPY & SETTINGS
+// ══════════════════════════════════════════
+function copyText(teks,btn){
+  if(navigator.clipboard&&window.isSecureContext){
+    navigator.clipboard.writeText(teks).then(()=>flashCopied(btn)).catch(()=>copyFallback(teks,btn));
+  } else copyFallback(teks,btn);
+}
+function copyFallback(teks,btn){
+  const ta=document.createElement('textarea');
+  ta.value=teks;ta.style.cssText='position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  document.body.appendChild(ta);ta.focus();ta.select();
+  try{document.execCommand('copy');flashCopied(btn);}catch{}
+  document.body.removeChild(ta);
+}
+function flashCopied(btn){
+  if(!btn)return;
+  const ori=btn.textContent;btn.textContent='Tersalin ✓';
+  setTimeout(()=>btn.textContent=ori,2000);
+}
+
+function loadCfgForm(){
+  cfg=loadC();
+  document.getElementById('cfg-nama').value=cfg.nama||'';
+  document.getElementById('cfg-rek').value=cfg.rek||'';
+  document.getElementById('cfg-salam').value=cfg.salam||'';
+  document.getElementById('cfg-catatan').value=cfg.catatan||'';
+}
+function getCfgFromForm(){
+  return{
+    nama:document.getElementById('cfg-nama').value.trim(),
+    rek:document.getElementById('cfg-rek').value.trim(),
+    salam:document.getElementById('cfg-salam').value.trim(),
+    catatan:document.getElementById('cfg-catatan').value.trim()
+  };
+}
+function saveSettings(){
+  const c=getCfgFromForm();saveC(c);cfg=c;toast('Pengaturan disimpan ✓');
+}
+function previewCfg(){
+  const c=getCfgFromForm();
+  const contoh={items:[{nama_produk:'Tas Kulit Italia',qty:1,harga:850000,fee_jastip:50000},{nama_produk:'Dompet Kecil',qty:2,harga:120000,fee_jastip:15000}]};
+  const totalOrder=calcTotalOrder(contoh.items);
+  const pesan=buildPesan(contoh,totalOrder,0,totalOrder);
+  const el=document.getElementById('cfg-preview');
+  document.getElementById('cfg-preview-text').textContent=pesan;
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+document.querySelectorAll('.overlay').forEach(ov=>{
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open')});
+});
+document.addEventListener('click',e=>{
+  ['a-suggest','pay-suggest'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&!el.contains(e.target)&&e.target.id!==id.replace('-suggest',''))el.style.display='none';
+  });
+});
+
+cfg=loadC();
+loadOrders();
+</script>
+</body>
+</html>
