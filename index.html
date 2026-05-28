@@ -40,6 +40,7 @@ tbody tr:hover td{background:#fafaf8}
 .bl{background:#E1F5EE;color:#0F6E56}
 .bt{background:#E6F1FB;color:#185FA5}
 .bb{background:#FAEEDA;color:#854F0B}
+.bw{background:#F3F0FF;color:#5B21B6}
 .aksi{display:flex;gap:5px;flex-wrap:wrap}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.42);display:none;align-items:center;justify-content:center;z-index:50;padding:1rem}
 .overlay.open{display:flex}
@@ -189,9 +190,11 @@ tbody tr:hover td{background:#fafaf8}
   <!-- IMPORT/EXPORT -->
   <div id="tab-import" class="page">
     <div class="info">
-      <strong>Format CSV (7 kolom):</strong><br>
-      <code>chat_id</code> · <code>order_id</code> · <code>nama_produk</code> · <code>qty</code> · <code>harga</code> · <code>fee_jastip</code> · <code>status</code><br><br>
-      Upload CSV baru → order yang sama (order_id sama) akan diperbarui itemnya. <strong>Sisa tagihan = total baru − pembayaran yang sudah tercatat.</strong>
+      <strong>Format Excel / CSV (7 kolom):</strong><br>
+      <code>order_id (no HP)</code> · <code>nama_produk</code> · <code>qty</code> · <code>harga</code> · <code>fee_jastip</code> · <code>total</code> · <code>status</code><br><br>
+      Status yang dikenali: <code>LUNAS</code> · <code>BELUM LUNAS</code> · <code>WL</code><br>
+      Item <code>WL</code> → tidak masuk tagihan, muncul di bagian bawah pesan WA sebagai daftar waitlist.<br>
+      Upload CSV baru → sisa tagihan = total baru − pembayaran yang sudah tercatat.
     </div>
     <div class="upload-zone" onclick="document.getElementById('csv-input').click()">
       Klik untuk upload file CSV dari Google Sheets
@@ -381,6 +384,7 @@ function normaliseStatus(raw){
   if(!raw)return'BELUM LUNAS';
   const s=raw.trim().toUpperCase();
   if(s==='LUNAS')return'LUNAS';
+  if(s==='WL')return'WL';
   if(s.includes('TAGIHAN')||s.includes('DIKIRIM'))return'TAGIHAN DIKIRIM';
   return'BELUM LUNAS';
 }
@@ -443,11 +447,17 @@ async function loadOrders(){
       const dibayar=payMap[o.order_id]||0;
       const sisa=Math.max(0,totalOrder-dibayar);
       const isL=o.status==='LUNAS';
-      const bc=isL?'bl':o.status==='TAGIHAN DIKIRIM'?'bt':'bb';
+      const isWL=o.status==='WL';
+      const bc=isL?'bl':o.status==='TAGIHAN DIKIRIM'?'bt':isWL?'bw':'bb';
       const hpValid=normaliseHP(o.chat_id);
-      const prods=(o.items||[]).map(it=>`<div>${it.nama_produk}<span style="color:#bbb"> ×${it.qty}</span></div>`).join('');
+      const wlItems=(o.items||[]).filter(it=>it.wl);
+      const wlBadge=wlItems.length>0?`<span class="badge bw" style="margin-left:4px" title="${wlItems.map(it=>it.nama_produk).join(', ')}">WL ${wlItems.length}</span>`:'';
+      const prods=(o.items||[]).map(it=>`<div>${it.wl?'<span style="color:#5B21B6">⏳</span> ':''} ${it.nama_produk}<span style="color:#bbb"> ×${it.qty}</span></div>`).join('');
       const aksi=isL
         ?`<button class="btn" onclick="openDetail('${esc(o.order_id)}')">Detail</button>`
+        :isWL
+        ?`<span style="font-size:12px;color:#5B21B6">Semua WL</span>
+          <button class="btn" onclick="openDetail('${esc(o.order_id)}')">Detail</button>`
         :(!hpValid
           ?`<span style="font-size:12px;color:#A32D2D">No HP ⚠</span>
             <button class="btn" onclick="openDetail('${esc(o.order_id)}')">Detail</button>`
@@ -457,7 +467,7 @@ async function loadOrders(){
         );
       return`<tr>
         <td style="font-family:monospace;font-size:12px">${o.order_id}</td>
-        <td><div style="font-weight:500">${o.nama_pelanggan}</div><div style="font-size:11px;color:#888">${o.chat_id||'—'}</div></td>
+        <td><div style="font-weight:500">${o.nama_pelanggan}${wlBadge}</div><div style="font-size:11px;color:#888">${o.chat_id||'—'}</div></td>
         <td>${prods}</td>
         <td>${fmt(totalOrder)}</td>
         <td style="color:#0F6E56">${dibayar>0?fmt(dibayar):'—'}</td>
@@ -553,8 +563,14 @@ async function openDetail(id){
 function buildPesan(o, sisa, dibayar, totalOrder){
   const c=cfg;
   const items=o.items||[];
-  const belum=items.filter(it=>!it.lunas);
-  const tampil=belum.length>0?belum:items;
+
+  // Pisah item WL dan yang bukan WL
+  const wlItems=items.filter(it=>it.status==='WL'||(it.wl===true));
+  const tagihItems=items.filter(it=>it.status!=='WL'&&!it.wl);
+
+  // Item yang ditampilkan untuk tagihan (belum lunas)
+  const belum=tagihItems.filter(it=>!it.lunas);
+  const tampil=belum.length>0?belum:tagihItems;
 
   const lines=tampil.map(it=>{
     const satuan=it.harga+(it.fee_jastip||0);
@@ -568,7 +584,12 @@ function buildPesan(o, sisa, dibayar, totalOrder){
     totalLine=`Total: ${fmt(sisa||totalOrder)}`;
   }
 
-  return`${c.salam}\n\n${lines}\n\n${totalLine}\n\nTransfer ke:\n💳 BCA ${c.rek} a.n ${c.nama}\n\n${c.catatan}`;
+  // Bagian WL di bawah
+  const wlSection=wlItems.length>0
+    ?`\n\n${'─'.repeat(26)}\nDaftar WL kamu:\n${wlItems.map(it=>`* ${it.nama_produk}`).join('\n')}\n_(akan dikonfirmasi ketersediaannya)_`
+    :'';
+
+  return`${c.salam}\n\n${lines}\n\n${totalLine}\n\nTransfer ke:\n💳 BCA ${c.rek} a.n ${c.nama}\n\n${c.catatan}${wlSection}`;
 }
 
 // ══════════════════════════════════════════
@@ -958,51 +979,82 @@ async function handleCSV(input){
     const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
     if(lines.length<2){toast('CSV kosong','err');input.value='';return}
     const dataLines=lines.slice(1);
+
+    // Format Excel: order_id(noHP) | nama_produk | qty | harga | fee_jastip | total | status
+    // order_id = no HP pelanggan, dipakai sebagai chat_id
+    // order_id internal dibuat: hp + urutan (misal: 628xxx-1, 628xxx-2)
     const grouped={};
+    let skippedWL=0;
+
     dataLines.forEach(line=>{
       const p=parseCSVLine(line);
-      if(p.length<5)return;
-      const chat_id=p[0]||'',order_id=p[1]||'',nama_produk=p[2]||'';
-      const qty=parseFloat(p[3])||1,harga=parseFloat(p[4])||0,fee_jastip=parseFloat(p[5])||0;
-      const rawStatus=p[6]||'';
-      if(!order_id)return;
-      if(!grouped[order_id]){
-        grouped[order_id]={chat_id,order_id,nama_pelanggan:chat_id,status:normaliseStatus(rawStatus),items:[]};
+      if(p.length<4)return;
+
+      const chat_id    = String(p[0]||'').trim();  // no HP
+      const nama_produk= String(p[1]||'').trim();
+      const qty        = parseFloat(p[2])||1;
+      const harga      = parseFloat(p[3])||0;
+      const fee_jastip = parseFloat(p[4])||0;
+      // kolom 5 = total (diabaikan, kita hitung sendiri)
+      const rawStatus  = String(p[6]||p[5]||'').trim(); // coba kolom 6 dulu, fallback kolom 5
+      const status     = normaliseStatus(rawStatus);
+
+      if(!chat_id||!nama_produk)return;
+
+      // Gunakan chat_id sebagai kunci grouping (semua item per pelanggan dalam 1 order)
+      if(!grouped[chat_id]){
+        grouped[chat_id]={
+          chat_id,
+          // order_id dibuat dari nomor HP
+          order_id: 'ORD-'+chat_id.replace(/\D/g,'').slice(-8),
+          nama_pelanggan: chat_id,
+          status: 'BELUM LUNAS', // status order ditentukan dari item non-WL
+          items:[]
+        };
       }
-      grouped[order_id].items.push({nama_produk,qty,harga,fee_jastip});
+
+      grouped[chat_id].items.push({
+        nama_produk, qty, harga, fee_jastip,
+        wl: status==='WL',   // tandai item WL
+        lunas: status==='LUNAS'
+      });
+
+      if(status==='WL') skippedWL++;
     });
 
-    const imported=Object.values(grouped);
+    // Hitung total order hanya dari item non-WL
+    const imported=Object.values(grouped).filter(o=>o.items.length>0);
     let added=0,updated=0,lunasAuto=0;
 
     for(const imp of imported){
-      const totalBaru=calcTotalOrder(imp.items);
+      const nonWLItems=imp.items.filter(it=>!it.wl);
+      const totalBaru=nonWLItems.reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
+
+      // Jika semua item WL, tetap simpan tapi status WL
+      const semuaWL=nonWLItems.length===0;
+      if(semuaWL) imp.status='WL';
+
       try{
-        // Cek apakah order sudah ada
         const existing=await sbGet('orders',`order_id=eq.${imp.order_id}`);
         if(existing.length){
           const o=existing[0];
-          // Ambil total pembayaran lama
           const pays=await sbGet('payments',`order_id=eq.${imp.order_id}`);
           const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
           const sisa=Math.max(0,totalBaru-totalDibayar);
-          // Tentukan status baru
-          let newStatus=sisa<=0?'LUNAS':normaliseStatus(imp.status);
-          if(sisa<=0&&o.status!=='LUNAS'){
+          let newStatus=semuaWL?'WL':sisa<=0&&totalBaru>0?'LUNAS':o.status==='WL'?'BELUM LUNAS':o.status;
+          if(sisa<=0&&totalBaru>0&&o.status!=='LUNAS'){
             lunasAuto++;
             await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalBaru,aksi:'LUNAS (import CSV)',pesan:''});
           }
           await sbPatch('orders',`order_id=eq.${imp.order_id}`,{
-            items:imp.items,total_order:totalBaru,status:newStatus,updated_at:new Date().toISOString()
+            items:imp.items, total_order:totalBaru, status:newStatus, updated_at:new Date().toISOString()
           });
           updated++;
         } else {
-          // Order baru
           await sbPost('orders',{
-            order_id:imp.order_id,chat_id:imp.chat_id,nama_pelanggan:imp.chat_id,
-            status:imp.status,items:imp.items,total_order:totalBaru
+            order_id:imp.order_id, chat_id:imp.chat_id, nama_pelanggan:imp.chat_id,
+            status:semuaWL?'WL':'BELUM LUNAS', items:imp.items, total_order:totalBaru
           });
-          // Auto-register pelanggan
           await sbUpsert('customers',{hp:imp.chat_id,nama:imp.chat_id,kota:'',note:''});
           added++;
         }
@@ -1013,9 +1065,10 @@ async function handleCSV(input){
       `✅ Import selesai\n`+
       `  + ${added} order baru\n`+
       `  ↻ ${updated} order diperbarui\n`+
-      `  ✓ ${lunasAuto} otomatis LUNAS (sisa = 0)\n`+
-      `  Total baris: ${dataLines.length}`;
-    toast(`Import: ${added} baru, ${updated} diperbarui`);
+      `  ✓ ${lunasAuto} otomatis LUNAS\n`+
+      `  ⏳ ${skippedWL} item WL (tidak dihitung ke tagihan, muncul di pesan WA)\n`+
+      `  Total baris data: ${dataLines.length}`;
+    toast(`Import: ${added} baru, ${updated} diperbarui, ${skippedWL} item WL`);
     input.value='';
     loadOrders();
   };
