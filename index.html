@@ -589,7 +589,7 @@ function buildPesan(o, sisa, dibayar, totalOrder){
     ?`\n\n${'─'.repeat(26)}\nDaftar WL kamu:\n${wlItems.map(it=>`* ${it.nama_produk}`).join('\n')}\n_(akan dikonfirmasi ketersediaannya)_`
     :'';
 
-  return`${c.salam}\n\n${lines}\n\n${totalLine}\n\nTransfer ke:\n💳 BCA ${c.rek} a.n ${c.nama}\n\n${c.catatan}${wlSection}`;
+  return`${c.salam}\n\n${lines}\n\n${totalLine}\n\nPembayaran bisa melalui QRIS atau transfer ke:\n💳 BCA ${c.rek} a.n ${c.nama}\n\n${c.catatan}${wlSection}`;
 }
 
 // ══════════════════════════════════════════
