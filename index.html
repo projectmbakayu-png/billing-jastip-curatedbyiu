@@ -121,17 +121,25 @@ tbody tr:hover td{background:#fafaf8}
 
   <!-- INPUT PEMBAYARAN -->
   <div id="tab-payments" class="page">
-    <div class="info">Catat pembayaran yang masuk per order. Sisa tagihan akan otomatis berkurang. Jika sisa = 0, status order otomatis <strong>LUNAS</strong>.</div>
-    <div style="background:#fff;border:1px solid #eee;border-radius:10px;padding:1.25rem;max-width:480px">
+    <div class="info">Catat pembayaran yang masuk per pelanggan. Sisa tagihan otomatis berkurang. Jika sisa = 0, status order otomatis <strong>LUNAS</strong>.</div>
+
+    <!-- Toggle manual / upload -->
+    <div style="display:flex;gap:8px;margin-bottom:.25rem">
+      <button class="btn btn-blue" id="pay-tab-manual" onclick="switchPayTab('manual')">Input manual</button>
+      <button class="btn" id="pay-tab-upload" onclick="switchPayTab('upload')">Upload Excel</button>
+    </div>
+
+    <!-- MANUAL -->
+    <div id="pay-panel-manual" style="background:#fff;border:1px solid #eee;border-radius:10px;padding:1.25rem;max-width:480px">
       <div class="fg">
         <div class="full">
-          <div class="flbl">Order ID</div>
-          <input class="fi" id="pay-order-id" placeholder="ORD-001 atau ketik nama..." oninput="searchOrderForPay()" autocomplete="off">
+          <div class="flbl">No HP / Order ID</div>
+          <input class="fi" id="pay-order-id" placeholder="628xxx atau ketik nama..." oninput="searchOrderForPay()" autocomplete="off">
           <div class="suggest-box" id="pay-suggest"></div>
         </div>
         <div class="full" id="pay-order-info" style="display:none;background:#fafaf8;border:1px solid #eee;border-radius:8px;padding:10px;font-size:13px"></div>
         <div>
-          <div class="flbl">Jumlah pembayaran (Rp)</div>
+          <div class="flbl">Nominal pembayaran (Rp)</div>
           <input class="fi" id="pay-jumlah" type="number" min="0" placeholder="150000">
         </div>
         <div>
@@ -145,6 +153,10 @@ tbody tr:hover td{background:#fafaf8}
             <option>Lainnya</option>
           </select>
         </div>
+        <div>
+          <div class="flbl">Tanggal pembayaran</div>
+          <input class="fi" id="pay-tgl" type="date">
+        </div>
         <div class="full">
           <div class="flbl">Catatan (opsional)</div>
           <input class="fi" id="pay-catatan" placeholder="DP pertama, pelunasan, dsb...">
@@ -155,11 +167,27 @@ tbody tr:hover td{background:#fafaf8}
         <button class="btn" onclick="clearPayForm()">Reset</button>
       </div>
     </div>
+
+    <!-- UPLOAD EXCEL -->
+    <div id="pay-panel-upload" style="display:none;display:flex;flex-direction:column;gap:10px">
+      <div class="info">
+        <strong>Format Excel / CSV pembayaran (4 kolom):</strong><br>
+        <code>no_hp</code> · <code>order_id (no HP)</code> · <code>nominal_pembayaran</code> · <code>tgl</code><br>
+        Kolom <code>tgl</code> format: <code>YYYY-MM-DD</code> atau <code>DD/MM/YYYY</code>. Header baris pertama dilewati otomatis.
+      </div>
+      <div class="upload-zone" onclick="document.getElementById('pay-csv-input').click()">
+        Klik untuk upload file Excel / CSV pembayaran
+        <div style="font-size:12px;color:#bbb;margin-top:6px">Simpan Excel sebagai CSV terlebih dahulu</div>
+        <input type="file" id="pay-csv-input" accept=".csv,.xlsx" style="display:none" onchange="handlePayCSV(this)">
+      </div>
+      <div id="pay-import-log" class="info" style="display:none;white-space:pre-wrap;font-family:monospace;font-size:12px"></div>
+    </div>
+
     <div style="margin-top:.5rem">
       <div style="font-size:13px;font-weight:500;margin-bottom:.75rem">Riwayat pembayaran terbaru</div>
       <div class="tbl-wrap">
         <table>
-          <thead><tr><th>Order ID</th><th>Pelanggan</th><th>Jumlah</th><th>Metode</th><th>Catatan</th><th>Waktu</th><th>Aksi</th></tr></thead>
+          <thead><tr><th>No HP</th><th>Pelanggan</th><th>Nominal</th><th>Metode</th><th>Catatan</th><th>Tanggal</th><th>Aksi</th></tr></thead>
           <tbody id="pay-tbody"><tr><td colspan="7" class="loading-bar"><span class="spinner"></span>Memuat...</td></tr></tbody>
         </table>
       </div>
@@ -681,25 +709,27 @@ async function saveOrder(){
 
   const items=[{nama_produk:produk,qty,harga,fee_jastip:fee}];
   const total=calcTotalOrder(items);
-
-  // Generate order_id
-  const existing=await sbGet('orders','select=order_id&order=created_at.desc&limit=1');
-  let nextNum=1;
-  if(existing.length){
-    const m=existing[0].order_id.match(/(\d+)$/);
-    if(m)nextNum=parseInt(m[1])+1;
-  }
-  const order_id=`ORD-${String(nextNum).padStart(3,'0')}`;
+  // order_id = no HP itu sendiri
+  const order_id=chat.replace(/\D/g,'');
 
   try{
-    await sbPost('orders',{order_id,chat_id:chat,nama_pelanggan:nama,status:'BELUM LUNAS',items,total_order:total});
-    // Auto-register pelanggan
+    // Cek apakah order untuk HP ini sudah ada, jika ada merge items
+    const existing=await sbGet('orders',`order_id=eq.${order_id}`);
+    if(existing.length){
+      const o=existing[0];
+      const mergedItems=[...(o.items||[]),...items];
+      const newTotal=calcTotalOrder(mergedItems);
+      await sbPatch('orders',`order_id=eq.${order_id}`,{items:mergedItems,total_order:newTotal,updated_at:new Date().toISOString()});
+      toast(`Item ditambahkan ke order ${order_id}`);
+    } else {
+      await sbPost('orders',{order_id,chat_id:chat,nama_pelanggan:nama,status:'BELUM LUNAS',items,total_order:total});
+      toast(`Order ${order_id} ditambahkan`);
+    }
     await sbUpsert('customers',{hp:chat,nama,kota:'',note:''});
     closeOv('ov-add');
     ['a-chat','a-nama','a-produk','a-harga'].forEach(x=>document.getElementById(x).value='');
     document.getElementById('a-qty').value='1';document.getElementById('a-fee').value='0';
     document.getElementById('a-suggest').style.display='none';
-    toast(`Order ${order_id} ditambahkan`);
     loadOrders();
   }catch(e){toast('Gagal simpan: '+e.message,'err')}
 }
@@ -708,6 +738,24 @@ async function saveOrder(){
 // PAYMENTS
 // ══════════════════════════════════════════
 let ordersForPay=[];
+
+function switchPayTab(tab){
+  document.getElementById('pay-panel-manual').style.display=tab==='manual'?'block':'none';
+  document.getElementById('pay-panel-upload').style.display=tab==='upload'?'flex':'none';
+  document.getElementById('pay-tab-manual').className='btn'+(tab==='manual'?' btn-blue':'');
+  document.getElementById('pay-tab-upload').className='btn'+(tab==='upload'?' btn-blue':'');
+}
+
+function parseTgl(raw){
+  if(!raw)return new Date().toISOString();
+  const s=String(raw).trim();
+  // Format DD/MM/YYYY
+  const dmy=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(dmy)return new Date(`${dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`).toISOString();
+  // Format YYYY-MM-DD atau ISO
+  const d=new Date(s);
+  return isNaN(d)?new Date().toISOString():d.toISOString();
+}
 
 async function loadOrdersForPaySuggest(){
   try{ordersForPay=await sbGet('orders','select=order_id,nama_pelanggan,total_order,status&order=created_at.desc&limit=500')}catch{}
@@ -719,18 +767,16 @@ async function loadPayments(){
   try{
     const pays=await sbGet('payments','order=created_at.desc&limit=100');
     if(!pays.length){tbody.innerHTML=`<tr><td colspan="7" class="empty">Belum ada pembayaran.</td></tr>`;return}
-    // Ambil nama pelanggan
     const orderIds=[...new Set(pays.map(p=>p.order_id))];
     const ords=await sbGet('orders',`order_id=in.(${orderIds.map(id=>`"${id}"`).join(',')})&select=order_id,nama_pelanggan`);
     const ordMap={};ords.forEach(o=>ordMap[o.order_id]=o.nama_pelanggan);
-
     tbody.innerHTML=pays.map(p=>`<tr>
       <td style="font-family:monospace;font-size:12px">${p.order_id}</td>
       <td>${ordMap[p.order_id]||'—'}</td>
       <td style="font-weight:500;color:#0F6E56">${fmt(p.jumlah)}</td>
       <td>${p.metode||'—'}</td>
       <td>${p.catatan||'—'}</td>
-      <td style="font-size:12px;color:#888">${new Date(p.created_at).toLocaleString('id-ID')}</td>
+      <td style="font-size:12px;color:#888">${new Date(p.created_at).toLocaleDateString('id-ID')}</td>
       <td><button class="btn btn-red" style="font-size:12px;padding:3px 9px" onclick="deletePayment('${p.id}','${p.order_id}')">Hapus</button></td>
     </tr>`).join('');
   }catch(e){tbody.innerHTML=`<tr><td colspan="7" class="empty">Gagal: ${e.message}</td></tr>`}
@@ -770,7 +816,7 @@ async function selectOrderForPay(id){
     const info=document.getElementById('pay-order-info');
     info.style.display='block';
     info.innerHTML=`<strong>${o.nama_pelanggan}</strong> · ${id}<br>
-      Total: ${fmt(totalOrder)} &nbsp;·&nbsp; Dibayar: <span style="color:#0F6E56">${fmt(dibayar)}</span> &nbsp;·&nbsp; 
+      Total: ${fmt(totalOrder)} &nbsp;·&nbsp; Dibayar: <span style="color:#0F6E56">${fmt(dibayar)}</span> &nbsp;·&nbsp;
       Sisa: <span style="color:#854F0B;font-weight:500">${fmt(sisa)}</span>`;
     document.getElementById('pay-jumlah').value=sisa||'';
   }catch{}
@@ -778,6 +824,7 @@ async function selectOrderForPay(id){
 
 function quickPayFor(id,nama,sisa){
   switchTab('payments');
+  switchPayTab('manual');
   document.getElementById('pay-order-id').value=id;
   document.getElementById('pay-jumlah').value=sisa||'';
   document.getElementById('pay-order-info').style.display='block';
@@ -785,47 +832,90 @@ function quickPayFor(id,nama,sisa){
 }
 
 async function savePayment(){
-  const order_id=document.getElementById('pay-order-id').value.trim();
+  const rawId=document.getElementById('pay-order-id').value.trim();
+  const order_id=rawId.replace(/\D/g,'')||rawId; // bersihkan jadi angka saja
   const jumlah=parseFloat(document.getElementById('pay-jumlah').value)||0;
   const metode=document.getElementById('pay-metode').value;
   const catatan=document.getElementById('pay-catatan').value.trim();
-  if(!order_id||!jumlah){toast('Order ID dan jumlah wajib diisi','err');return}
-
+  const tglRaw=document.getElementById('pay-tgl').value;
+  const created_at=tglRaw?new Date(tglRaw).toISOString():new Date().toISOString();
+  if(!order_id||!jumlah){toast('No HP dan nominal wajib diisi','err');return}
   try{
-    // Cek order ada
     const ords=await sbGet('orders',`order_id=eq.${order_id}`);
-    if(!ords.length){toast('Order ID tidak ditemukan','err');return}
+    if(!ords.length){toast('No HP / Order tidak ditemukan','err');return}
     const o=ords[0];
-
-    // Simpan pembayaran
-    await sbPost('payments',{order_id,jumlah,metode,catatan});
-
-    // Hitung total dibayar sekarang
+    await sbPost('payments',{order_id,jumlah,metode,catatan,created_at});
     const pays=await sbGet('payments',`order_id=eq.${order_id}`);
     const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
     const totalOrder=o.total_order||calcTotalOrder(o.items);
     const sisa=Math.max(0,totalOrder-totalDibayar);
-
-    // Auto lunas jika sisa = 0
     if(sisa<=0&&o.status!=='LUNAS'){
       await sbPatch('orders',`order_id=eq.${order_id}`,{status:'LUNAS',updated_at:new Date().toISOString()});
       await sbPost('tagihan_history',{order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalOrder,aksi:'LUNAS (bayar lunas)',pesan:''});
-      toast(`✓ Pembayaran disimpan — Order ${order_id} otomatis LUNAS`);
+      toast(`✓ Tersimpan — ${order_id} otomatis LUNAS`);
     } else {
       toast(`✓ Pembayaran ${fmt(jumlah)} disimpan. Sisa: ${fmt(sisa)}`);
     }
-
-    clearPayForm();
-    loadPayments();
-    loadOrders();
+    clearPayForm();loadPayments();loadOrders();
   }catch(e){toast('Gagal simpan: '+e.message,'err')}
+}
+
+// Upload CSV pembayaran: no_hp | order_id(noHP) | nominal | tgl
+async function handlePayCSV(input){
+  const file=input.files[0];if(!file)return;
+  const logEl=document.getElementById('pay-import-log');
+  logEl.style.display='block';logEl.textContent='Memproses...';
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length<2){toast('CSV kosong','err');input.value='';return}
+    const dataLines=lines.slice(1);
+    let saved=0,skipped=0,lunasAuto=0;
+    for(const line of dataLines){
+      const p=parseCSVLine(line);
+      if(p.length<3)continue;
+      // Kolom: no_hp | order_id(noHP) | nominal | tgl
+      // order_id bisa di kolom 0 atau 1 — pakai yang ada angkanya
+      const hp=String(p[0]||p[1]||'').replace(/\D/g,'');
+      const order_id=hp;
+      const jumlah=parseFloat(String(p[2]||p[1]||'').replace(/[^\d.]/g,''))||0;
+      const tglRaw=p[3]||'';
+      const created_at=parseTgl(tglRaw);
+      if(!order_id||!jumlah){skipped++;continue}
+      try{
+        const ords=await sbGet('orders',`order_id=eq.${order_id}`);
+        if(!ords.length){skipped++;continue}
+        const o=ords[0];
+        await sbPost('payments',{order_id,jumlah,metode:'Transfer (import)',catatan:'Import CSV',created_at});
+        const pays=await sbGet('payments',`order_id=eq.${order_id}`);
+        const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+        const totalOrder=o.total_order||calcTotalOrder(o.items);
+        const sisa=Math.max(0,totalOrder-totalDibayar);
+        if(sisa<=0&&o.status!=='LUNAS'){
+          await sbPatch('orders',`order_id=eq.${order_id}`,{status:'LUNAS',updated_at:new Date().toISOString()});
+          await sbPost('tagihan_history',{order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalOrder,aksi:'LUNAS (import pembayaran)',pesan:''});
+          lunasAuto++;
+        }
+        saved++;
+      }catch(err){skipped++;console.error(order_id,err)}
+    }
+    logEl.textContent=
+      `✅ Import pembayaran selesai\n`+
+      `  ✓ ${saved} pembayaran disimpan\n`+
+      `  ✓ ${lunasAuto} order otomatis LUNAS\n`+
+      `  ✗ ${skipped} baris dilewati (order tidak ada / data tidak valid)\n`+
+      `  Total baris: ${dataLines.length}`;
+    toast(`Import: ${saved} pembayaran, ${lunasAuto} LUNAS`);
+    input.value='';
+    loadPayments();loadOrders();
+  };
+  reader.readAsText(file);
 }
 
 async function deletePayment(payId, orderId){
   if(!confirm('Hapus catatan pembayaran ini?'))return;
   try{
     await sbDelete('payments',`id=eq.${payId}`);
-    // Cek ulang apakah masih lunas
     const [ords,pays]=await Promise.all([
       sbGet('orders',`order_id=eq.${orderId}`),
       sbGet('payments',`order_id=eq.${orderId}`)
@@ -834,13 +924,10 @@ async function deletePayment(payId, orderId){
     if(o&&o.status==='LUNAS'){
       const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
       const totalOrder=o.total_order||calcTotalOrder(o.items);
-      if(totalDibayar<totalOrder){
-        await sbPatch('orders',`order_id=eq.${orderId}`,{status:'BELUM LUNAS',updated_at:new Date().toISOString()});
-      }
+      if(totalDibayar<totalOrder)await sbPatch('orders',`order_id=eq.${orderId}`,{status:'BELUM LUNAS',updated_at:new Date().toISOString()});
     }
     toast('Pembayaran dihapus');
-    loadPayments();
-    loadOrders();
+    loadPayments();loadOrders();
     if(currentDetailId===orderId)openDetail(orderId);
   }catch(e){toast('Gagal hapus: '+e.message,'err')}
 }
@@ -849,6 +936,7 @@ function clearPayForm(){
   document.getElementById('pay-order-id').value='';
   document.getElementById('pay-jumlah').value='';
   document.getElementById('pay-catatan').value='';
+  document.getElementById('pay-tgl').value='';
   document.getElementById('pay-order-info').style.display='none';
   document.getElementById('pay-suggest').style.display='none';
 }
@@ -1005,10 +1093,9 @@ async function handleCSV(input){
       if(!grouped[chat_id]){
         grouped[chat_id]={
           chat_id,
-          // order_id dibuat dari nomor HP
-          order_id: 'ORD-'+chat_id.replace(/\D/g,'').slice(-8),
+          order_id: chat_id.replace(/\D/g,''), // order_id = no HP bersih
           nama_pelanggan: chat_id,
-          status: 'BELUM LUNAS', // status order ditentukan dari item non-WL
+          status: 'BELUM LUNAS',
           items:[]
         };
       }
@@ -1184,6 +1271,7 @@ document.addEventListener('click',e=>{
 });
 
 cfg=loadC();
+switchPayTab('manual');
 loadOrders();
 </script>
 </body>
