@@ -343,6 +343,42 @@ async function sbGet(table, params=''){
   if(!r.ok)throw new Error(await r.text());
   return r.json();
 }
+
+// Exact match via RPC — aman untuk order_id dengan spasi/strip/karakter khusus
+async function sbRPC(fn, params={}){
+  const r=await fetch(`${SB_URL}/rest/v1/rpc/${fn}`,{
+    method:'POST',
+    headers:HEADERS,
+    body:JSON.stringify(params)
+  });
+  if(!r.ok)return[];
+  try{return await r.json()}catch{return[]}
+}
+
+async function findOrderById(order_id){
+  // Coba RPC dulu (paling akurat), fallback ke GET biasa
+  try{
+    const res=await sbRPC('get_order_by_id',{p_order_id:order_id});
+    if(res&&res.length)return res;
+  }catch{}
+  // Fallback: GET dengan encoding manual
+  try{
+    const res=await sbGet('orders',`order_id=eq.${encodeURIComponent(order_id)}`);
+    if(res&&res.length)return res;
+  }catch{}
+  return[];
+}
+
+async function findOrderByChat(chat_id){
+  try{
+    const res=await sbRPC('get_order_by_chat',{p_chat_id:chat_id});
+    if(res&&res.length)return res;
+  }catch{}
+  try{
+    return await sbGet('orders',`chat_id=eq.${encodeURIComponent(chat_id)}`);
+  }catch{}
+  return[];
+}
 async function sbPost(table, body){
   const r=await fetch(`${SB_URL}/rest/v1/${table}`,{method:'POST',headers:HEADERS,body:JSON.stringify(body)});
   if(!r.ok)throw new Error(await r.text());
@@ -352,6 +388,21 @@ async function sbPatch(table, match, body){
   const r=await fetch(`${SB_URL}/rest/v1/${table}?${match}`,{method:'PATCH',headers:{...HEADERS,'Prefer':'return=representation'},body:JSON.stringify(body)});
   if(!r.ok)throw new Error(await r.text());
   return r.json();
+}
+
+// Patch/delete by order_id yang mungkin punya karakter spesial
+async function sbPatchOrderId(table, order_id, body){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?order_id=eq.${encodeURIComponent(order_id)}`,{
+    method:'PATCH',headers:{...HEADERS,'Prefer':'return=representation'},body:JSON.stringify(body)
+  });
+  if(!r.ok)throw new Error(await r.text());
+  return r.json();
+}
+async function sbDeleteOrderId(table, order_id){
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?order_id=eq.${encodeURIComponent(order_id)}`,{
+    method:'DELETE',headers:HEADERS
+  });
+  if(!r.ok)throw new Error(await r.text());
 }
 async function sbDelete(table, match){
   const r=await fetch(`${SB_URL}/rest/v1/${table}?${match}`,{method:'DELETE',headers:HEADERS});
@@ -535,7 +586,7 @@ async function openDetail(id){
 
   try{
     const [orders,pays]=await Promise.all([
-      sbGet('orders',`order_id=eq.${id}`),
+      findOrderById(id),
       sbGet('payments',`order_id=eq.${id}&order=created_at.asc`)
     ]);
     const o=orders[0];if(!o)return;
@@ -633,7 +684,7 @@ function buildPesan(o, sisa, dibayar, totalOrder){
 async function doTagih(id){
   try{
     const [orders,pays]=await Promise.all([
-      sbGet('orders',`order_id=eq.${id}`),
+      findOrderById(id),
       sbGet('payments',`order_id=eq.${id}`)
     ]);
     const o=orders[0];
@@ -649,7 +700,7 @@ async function doTagih(id){
 
     window.open('https://wa.me/'+hp+'?text='+encodeURIComponent(pesan),'_blank');
 
-    await sbPatch('orders',`order_id=eq.${id}`,{status:'TAGIHAN DIKIRIM',updated_at:new Date().toISOString()});
+    await sbPatchOrderId('orders',id,{status:'TAGIHAN DIKIRIM',updated_at:new Date().toISOString()});
     await sbPost('tagihan_history',{order_id:id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:sisa,aksi:'TAGIHAN DIKIRIM',pesan});
 
     toast(`WA terbuka → ${o.nama_pelanggan}`);
@@ -659,7 +710,7 @@ async function doTagih(id){
 
 async function doLunas(id){
   try{
-    await sbPatch('orders',`order_id=eq.${id}`,{status:'LUNAS',updated_at:new Date().toISOString()});
+    await sbPatchOrderId('orders',id,{status:'LUNAS',updated_at:new Date().toISOString()});
     await sbPost('tagihan_history',{order_id:id,aksi:'LUNAS',total:0,pelanggan:'',chat_id:''});
     toast(`Order ${id} lunas ✓`);
     loadOrders();
@@ -669,7 +720,7 @@ async function doLunas(id){
 async function deleteOrder(id){
   if(!confirm(`Hapus order ${id}?`))return;
   try{
-    await sbDelete('orders',`order_id=eq.${id}`);
+    await sbDeleteOrderId('orders',id);
     closeOv('ov-detail');
     toast(`Order ${id} dihapus`);
     loadOrders();
@@ -721,12 +772,12 @@ async function saveOrder(){
 
   try{
     // Cek apakah order untuk HP ini sudah ada, jika ada merge items
-    const existing=await sbGet('orders',`order_id=eq.${order_id}`);
+    const existing=await findOrderById(order_id);
     if(existing.length){
       const o=existing[0];
       const mergedItems=[...(o.items||[]),...items];
       const newTotal=calcTotalOrder(mergedItems);
-      await sbPatch('orders',`order_id=eq.${order_id}`,{items:mergedItems,total_order:newTotal,updated_at:new Date().toISOString()});
+      await sbPatchOrderId('orders',order_id,{items:mergedItems,total_order:newTotal,updated_at:new Date().toISOString()});
       toast(`Item ditambahkan ke order ${order_id}`);
     } else {
       await sbPost('orders',{order_id,chat_id:chat,nama_pelanggan:nama,status:'BELUM LUNAS',items,total_order:total});
@@ -813,7 +864,7 @@ async function selectOrderForPay(id){
   document.getElementById('pay-suggest').style.display='none';
   try{
     const [orders,pays]=await Promise.all([
-      sbGet('orders',`order_id=eq.${id}`),
+      findOrderById(id),
       sbGet('payments',`order_id=eq.${id}`)
     ]);
     const o=orders[0];if(!o)return;
@@ -848,7 +899,7 @@ async function savePayment(){
   const created_at=tglRaw?new Date(tglRaw).toISOString():new Date().toISOString();
   if(!order_id||!jumlah){toast('No HP dan nominal wajib diisi','err');return}
   try{
-    const ords=await sbGet('orders',`order_id=eq.${order_id}`);
+    const ords=await findOrderById(order_id);
     if(!ords.length){toast('No HP / Order tidak ditemukan','err');return}
     const o=ords[0];
     await sbPost('payments',{order_id,jumlah,metode,catatan,created_at});
@@ -857,7 +908,7 @@ async function savePayment(){
     const totalOrder=o.total_order||calcTotalOrder(o.items);
     const sisa=Math.max(0,totalOrder-totalDibayar);
     if(sisa<=0&&o.status!=='LUNAS'){
-      await sbPatch('orders',`order_id=eq.${order_id}`,{status:'LUNAS',updated_at:new Date().toISOString()});
+      await sbPatchOrderId('orders',order_id,{status:'LUNAS',updated_at:new Date().toISOString()});
       await sbPost('tagihan_history',{order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalOrder,aksi:'LUNAS (bayar lunas)',pesan:''});
       toast(`✓ Tersimpan — ${order_id} otomatis LUNAS`);
     } else {
@@ -890,7 +941,7 @@ async function handlePayCSV(input){
       const created_at=parseTgl(tglRaw);
       if(!order_id||!jumlah){skipped++;continue}
       try{
-        const ords=await sbGet('orders',`order_id=eq.${order_id}`);
+        const ords=await findOrderById(order_id);
         if(!ords.length){skipped++;continue}
         const o=ords[0];
         await sbPost('payments',{order_id,jumlah,metode:'Transfer (import)',catatan:'Import CSV',created_at});
@@ -899,7 +950,7 @@ async function handlePayCSV(input){
         const totalOrder=o.total_order||calcTotalOrder(o.items);
         const sisa=Math.max(0,totalOrder-totalDibayar);
         if(sisa<=0&&o.status!=='LUNAS'){
-          await sbPatch('orders',`order_id=eq.${order_id}`,{status:'LUNAS',updated_at:new Date().toISOString()});
+          await sbPatchOrderId('orders',order_id,{status:'LUNAS',updated_at:new Date().toISOString()});
           await sbPost('tagihan_history',{order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalOrder,aksi:'LUNAS (import pembayaran)',pesan:''});
           lunasAuto++;
         }
@@ -924,14 +975,14 @@ async function deletePayment(payId, orderId){
   try{
     await sbDelete('payments',`id=eq.${payId}`);
     const [ords,pays]=await Promise.all([
-      sbGet('orders',`order_id=eq.${orderId}`),
+      findOrderById(orderId),
       sbGet('payments',`order_id=eq.${orderId}`)
     ]);
     const o=ords[0];
     if(o&&o.status==='LUNAS'){
       const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
       const totalOrder=o.total_order||calcTotalOrder(o.items);
-      if(totalDibayar<totalOrder)await sbPatch('orders',`order_id=eq.${orderId}`,{status:'BELUM LUNAS',updated_at:new Date().toISOString()});
+      if(totalDibayar<totalOrder)await sbPatchOrderId('orders',orderId,{status:'BELUM LUNAS',updated_at:new Date().toISOString()});
     }
     toast('Pembayaran dihapus');
     loadPayments();loadOrders();
@@ -1128,9 +1179,9 @@ async function handleCSV(input){
       const semuaWL=nonWL.length===0;
 
       try{
-        // ── Cari order: by order_id dulu, fallback by chat_id ──
-        let existingByOrderId=await sbGet('orders',`order_id=eq.${encodeURIComponent(imp.order_id)}`);
-        let existingByChat   =await sbGet('orders',`chat_id=eq.${encodeURIComponent(imp.order_id)}&order=created_at.asc`);
+        // ── Cari order by order_id dan chat_id (handle spasi/strip di no HP) ──
+        let existingByOrderId=await findOrderById(imp.order_id);
+        let existingByChat   =await findOrderByChat(imp.order_id);
 
         // Gabungkan, deduplikasi by order_id
         const allFound=[...existingByOrderId];
@@ -1143,14 +1194,14 @@ async function handleCSV(input){
           for(const dup of toDelete){
             // Pindahkan payments ke order pertama sebelum hapus
             await sbPatch('payments',`order_id=eq.${dup.order_id}`,{order_id:allFound[0].order_id});
-            await sbDelete('orders',`order_id=eq.${dup.order_id}`);
+            await sbDeleteOrderId('orders',dup.order_id);
           }
         }
 
         // Pastikan order_id di-rename ke format standar jika belum
         if(allFound.length&&allFound[0].order_id!==imp.order_id){
           await sbPatch('payments',`order_id=eq.${allFound[0].order_id}`,{order_id:imp.order_id});
-          await sbPatch('orders',`order_id=eq.${allFound[0].order_id}`,{order_id:imp.order_id,chat_id:imp.order_id});
+          await sbPatchOrderId('orders',allFound[0].order_id,{order_id:imp.order_id,chat_id:imp.order_id});
           allFound[0].order_id=imp.order_id;
         }
 
@@ -1229,7 +1280,7 @@ async function handleCSV(input){
           }
 
           // Update order — REPLACE items & total, jangan tambah baris
-          await sbPatch('orders',`order_id=eq.${imp.order_id}`,{
+          await sbPatchOrderId('orders',imp.order_id,{
             items:imp.items,
             total_order:totalBaru,
             status:newStatus,
@@ -1238,7 +1289,7 @@ async function handleCSV(input){
 
           // Jika ada item WL → Belum Lunas, update status ke BELUM LUNAS agar bisa ditagih
           if(selisihWLkeTagih>0&&newStatus!=='LUNAS'){
-            await sbPatch('orders',`order_id=eq.${imp.order_id}`,{status:'BELUM LUNAS',updated_at:new Date().toISOString()});
+            await sbPatchOrderId('orders',imp.order_id,{status:'BELUM LUNAS',updated_at:new Date().toISOString()});
             wlToTagih++;
           }
 
