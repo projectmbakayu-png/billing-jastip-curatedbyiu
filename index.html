@@ -1061,105 +1061,217 @@ async function loadHistory(){
 async function handleCSV(input){
   const file=input.files[0];if(!file)return;
   const logEl=document.getElementById('import-log');
-  logEl.style.display='block';logEl.textContent='Memproses CSV...';
+  logEl.style.display='block';logEl.textContent='⏳ Memproses CSV...';
   const reader=new FileReader();
   reader.onload=async e=>{
     const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
     if(lines.length<2){toast('CSV kosong','err');input.value='';return}
     const dataLines=lines.slice(1);
 
-    // Format Excel: order_id(noHP) | nama_produk | qty | harga | fee_jastip | total | status
-    // order_id = no HP pelanggan, dipakai sebagai chat_id
-    // order_id internal dibuat: hp + urutan (misal: 628xxx-1, 628xxx-2)
+    // ── Parse CSV → grouped per no HP ──
     const grouped={};
-    let skippedWL=0;
-
     dataLines.forEach(line=>{
       const p=parseCSVLine(line);
       if(p.length<4)return;
-
-      const chat_id    = String(p[0]||'').trim();  // no HP
-      const nama_produk= String(p[1]||'').trim();
-      const qty        = parseFloat(p[2])||1;
-      const harga      = parseFloat(p[3])||0;
-      const fee_jastip = parseFloat(p[4])||0;
-      // kolom 5 = total (diabaikan, kita hitung sendiri)
-      const rawStatus  = String(p[6]||p[5]||'').trim(); // coba kolom 6 dulu, fallback kolom 5
-      const status     = normaliseStatus(rawStatus);
-
+      const chat_id    =String(p[0]||'').trim();
+      const nama_produk=String(p[1]||'').trim();
+      const qty        =parseFloat(p[2])||1;
+      const harga      =parseFloat(p[3])||0;
+      const fee_jastip =parseFloat(p[4])||0;
+      const rawStatus  =String(p[6]||p[5]||'').trim();
+      const status     =normaliseStatus(rawStatus);
       if(!chat_id||!nama_produk)return;
-
-      // Gunakan chat_id sebagai kunci grouping (semua item per pelanggan dalam 1 order)
       if(!grouped[chat_id]){
         grouped[chat_id]={
           chat_id,
-          order_id: chat_id.replace(/\D/g,''), // order_id = no HP bersih
-          nama_pelanggan: chat_id,
-          status: 'BELUM LUNAS',
+          order_id:chat_id.replace(/\D/g,''),
+          nama_pelanggan:chat_id,
           items:[]
         };
       }
-
-      grouped[chat_id].items.push({
-        nama_produk, qty, harga, fee_jastip,
-        wl: status==='WL',   // tandai item WL
-        lunas: status==='LUNAS'
-      });
-
-      if(status==='WL') skippedWL++;
+      grouped[chat_id].items.push({nama_produk,qty,harga,fee_jastip,wl:status==='WL',lunas:status==='LUNAS'});
     });
 
-    // Hitung total order hanya dari item non-WL
     const imported=Object.values(grouped).filter(o=>o.items.length>0);
-    let added=0,updated=0,lunasAuto=0;
+    let added=0,updated=0,lunasAuto=0,wlToTagih=0,perubahan=[];
 
     for(const imp of imported){
-      const nonWLItems=imp.items.filter(it=>!it.wl);
-      const totalBaru=nonWLItems.reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
-
-      // Jika semua item WL, tetap simpan tapi status WL
-      const semuaWL=nonWLItems.length===0;
-      if(semuaWL) imp.status='WL';
+      const nonWL =imp.items.filter(it=>!it.wl);
+      const wlItems=imp.items.filter(it=>it.wl);
+      const totalBaru=nonWL.reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
+      const semuaWL=nonWL.length===0;
 
       try{
         const existing=await sbGet('orders',`order_id=eq.${imp.order_id}`);
+        const pays=await sbGet('payments',`order_id=eq.${imp.order_id}`);
+        const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+
         if(existing.length){
+          // ── ORDER SUDAH ADA — update, jangan tambah baris baru ──
           const o=existing[0];
-          const pays=await sbGet('payments',`order_id=eq.${imp.order_id}`);
-          const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
-          const sisa=Math.max(0,totalBaru-totalDibayar);
-          let newStatus=semuaWL?'WL':sisa<=0&&totalBaru>0?'LUNAS':o.status==='WL'?'BELUM LUNAS':o.status;
-          if(sisa<=0&&totalBaru>0&&o.status!=='LUNAS'){
-            lunasAuto++;
-            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalBaru,aksi:'LUNAS (import CSV)',pesan:''});
-          }
-          await sbPatch('orders',`order_id=eq.${imp.order_id}`,{
-            items:imp.items, total_order:totalBaru, status:newStatus, updated_at:new Date().toISOString()
+          const totalLama=o.total_order||0;
+          const itemsLama=o.items||[];
+
+          // Deteksi perubahan status per item
+          let selisihWLkeTagih=0; // item WL lama → non-WL baru (tambah tagihan)
+          let selisihTagihkeWL=0; // item non-WL lama → WL baru (kurangi tagihan)
+          const itemsLamaMap={};
+          itemsLama.forEach(it=>itemsLamaMap[it.nama_produk]={...it});
+
+          imp.items.forEach(itBaru=>{
+            const itLama=itemsLamaMap[itBaru.nama_produk];
+            if(!itLama)return;
+            const nilaiItem=itBaru.qty*(itBaru.harga+(itBaru.fee_jastip||0));
+            if(itLama.wl&&!itBaru.wl){
+              // WL → Belum Lunas: tagihan bertambah
+              selisihWLkeTagih+=nilaiItem;
+            } else if(!itLama.wl&&itBaru.wl){
+              // Belum Lunas → WL: ada kelebihan dana
+              selisihTagihkeWL+=nilaiItem;
+            }
           });
+
+          // Hitung net lebih/kurang bayar setelah perubahan
+          const netTagihan=totalBaru; // total tagihan baru (non-WL saja)
+          const sisa=Math.max(0,netTagihan-totalDibayar);
+          const lebih=Math.max(0,totalDibayar-netTagihan);
+
+          // Tentukan status baru
+          let newStatus;
+          if(semuaWL)          newStatus='WL';
+          else if(netTagihan<=0)newStatus=o.status;
+          else if(lebih>0)      newStatus='LUNAS'; // sudah lebih bayar = lunas
+          else if(sisa<=0)      newStatus='LUNAS';
+          else                  newStatus=o.status==='WL'?'BELUM LUNAS':o.status;
+
+          // Simpan perubahan WL yang perlu dinotifikasi
+          if(selisihTagihkeWL>0){
+            const pesanWL=buildPesanPerubahanWL(imp,selisihTagihkeWL,sisa,lebih,totalDibayar);
+            perubahan.push({
+              order_id:imp.order_id,
+              nama:o.nama_pelanggan,
+              chat_id:o.chat_id,
+              selisihTagihkeWL,
+              selisihWLkeTagih,
+              sisa,lebih,
+              pesanWL
+            });
+            // Simpan ke histori
+            const aksiLog=lebih>0
+              ?`Perubahan WL — Kelebihan dana ${fmt(lebih)}`
+              :`Perubahan WL — Sisa tagihan ${fmt(sisa)}`;
+            await sbPost('tagihan_history',{
+              order_id:imp.order_id,
+              pelanggan:o.nama_pelanggan,
+              chat_id:o.chat_id,
+              total:netTagihan,
+              aksi:aksiLog,
+              pesan:pesanWL
+            });
+          }
+
+          // Auto LUNAS log
+          if((sisa<=0||lebih>0)&&o.status!=='LUNAS'&&!semuaWL){
+            lunasAuto++;
+            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:netTagihan,aksi:'LUNAS (import CSV)',pesan:''});
+          }
+
+          // Update order — REPLACE items & total, jangan tambah baris
+          await sbPatch('orders',`order_id=eq.${imp.order_id}`,{
+            items:imp.items,
+            total_order:totalBaru,
+            status:newStatus,
+            updated_at:new Date().toISOString()
+          });
+
+          // Jika ada item WL → Belum Lunas, update status ke BELUM LUNAS agar bisa ditagih
+          if(selisihWLkeTagih>0&&newStatus!=='LUNAS'){
+            await sbPatch('orders',`order_id=eq.${imp.order_id}`,{status:'BELUM LUNAS',updated_at:new Date().toISOString()});
+            wlToTagih++;
+          }
+
           updated++;
         } else {
+          // ── ORDER BARU ──
           await sbPost('orders',{
-            order_id:imp.order_id, chat_id:imp.chat_id, nama_pelanggan:imp.chat_id,
-            status:semuaWL?'WL':'BELUM LUNAS', items:imp.items, total_order:totalBaru
+            order_id:imp.order_id,
+            chat_id:imp.chat_id,
+            nama_pelanggan:imp.chat_id,
+            status:semuaWL?'WL':'BELUM LUNAS',
+            items:imp.items,
+            total_order:totalBaru
           });
           await sbUpsert('customers',{hp:imp.chat_id,nama:imp.chat_id,kota:'',note:''});
           added++;
         }
-      }catch(e){console.error(imp.order_id,e)}
+      }catch(err){console.error(imp.order_id,err)}
     }
 
-    logEl.textContent=
+    // ── Tampilkan hasil ──
+    let logText=
       `✅ Import selesai\n`+
+      `${'─'.repeat(32)}\n`+
       `  + ${added} order baru\n`+
-      `  ↻ ${updated} order diperbarui\n`+
+      `  ↻ ${updated} order diperbarui (tidak ada baris duplikat)\n`+
       `  ✓ ${lunasAuto} otomatis LUNAS\n`+
-      `  ⏳ ${skippedWL} item WL (tidak dihitung ke tagihan, muncul di pesan WA)\n`+
-      `  Total baris data: ${dataLines.length}`;
-    toast(`Import: ${added} baru, ${updated} diperbarui, ${skippedWL} item WL`);
+      `  🔔 ${wlToTagih} item WL → Belum Lunas (siap ditagih)\n`;
+
+    if(perubahan.length){
+      logText+=`\n⚠️ Perubahan status item (${perubahan.length} order):\n`;
+      perubahan.forEach(p=>{
+        logText+=`\n  ${p.order_id} — ${p.nama}\n`;
+        if(p.selisihTagihkeWL>0)logText+=`    Item masuk WL: −${fmt(p.selisihTagihkeWL)}\n`;
+        if(p.selisihWLkeTagih>0)logText+=`    Item dari WL: +${fmt(p.selisihWLkeTagih)}\n`;
+        if(p.lebih>0)           logText+=`    ✅ Kelebihan dana: ${fmt(p.lebih)}\n`;
+        else if(p.sisa>0)       logText+=`    ⚠️ Sisa tagihan: ${fmt(p.sisa)}\n`;
+        else                    logText+=`    ✓ Net: Lunas\n`;
+      });
+      logText+=`\nPesan WA untuk order yang ada perubahan sudah tersimpan di Histori Tagihan.`;
+    }
+
+    logEl.textContent=logText;
+    toast(`Import selesai: ${added} baru, ${updated} diperbarui`);
     input.value='';
     loadOrders();
   };
   reader.readAsText(file);
+}
+
+// Bangun pesan WA khusus perubahan WL
+function buildPesanPerubahanWL(imp,selisihTagihkeWL,sisa,lebih,totalDibayar){
+  const c=cfg;
+  const nonWL=imp.items.filter(it=>!it.wl);
+  const wlItems=imp.items.filter(it=>it.wl);
+
+  // Item yang menjadi WL (sebelumnya ditagihkan)
+  const wlLines=wlItems.map(it=>`* ${it.nama_produk} (${fmt(it.qty*(it.harga+(it.fee_jastip||0)))})`).join('\n');
+
+  // Tagihan yang masih harus dibayar
+  const tagihanLines=nonWL.filter(it=>!it.lunas).map(it=>`${it.nama_produk}\n${fmt(it.harga+(it.fee_jastip||0))} x ${it.qty}`).join('\n\n');
+
+  const totalTagihan=nonWL.reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
+
+  let pesanSaldo='';
+  if(lebih>0&&sisa>0){
+    pesanSaldo=`Kelebihan dana: ${fmt(lebih)}\nTagihan baru: ${fmt(sisa)}\nNet sisa pembayaran: ${fmt(Math.max(0,sisa-lebih))}`;
+  } else if(lebih>0){
+    pesanSaldo=`Kelebihan dana kamu: ${fmt(lebih)}\nBisa dikembalikan atau disimpan sebagai saldo.`;
+  } else if(sisa>0){
+    pesanSaldo=`Kelebihan sebelumnya telah diperhitungkan.\nSisa pembayaran: ${fmt(sisa)}`;
+  } else {
+    pesanSaldo=`Tagihan kamu sudah lunas. Terima kasih! ✓`;
+  }
+
+  return`${c.salam}
+
+Mohon maaf kak, ada perubahan pada pesanan kakak.
+
+Barang berikut belum tersedia / masuk daftar WL:
+${wlLines}
+
+${tagihanLines?`Tagihan yang masih perlu dibayar:\n\n${tagihanLines}\n\n`:''}${pesanSaldo}
+
+${totalTagihan>0?`Pembayaran bisa melalui QRIS atau transfer ke:\n💳 BCA ${c.rek} a.n ${c.nama}\n\n`:''}${c.catatan}`;
 }
 
 // ══════════════════════════════════════════
