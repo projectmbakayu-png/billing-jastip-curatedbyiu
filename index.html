@@ -113,7 +113,7 @@ tbody tr:hover td{background:#fafaf8}
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>Order ID</th><th>Pelanggan</th><th>Produk</th><th>Total</th><th>Dibayar</th><th>Sisa</th><th>Status</th><th>Aksi</th></tr></thead>
+        <thead><tr><th>Order ID (No HP)</th><th>Nama</th><th>Produk</th><th>Total</th><th>Dibayar</th><th>Sisa</th><th>Status</th><th>Aksi</th></tr></thead>
         <tbody id="orders-tbody"><tr><td colspan="8" class="loading-bar"><span class="spinner"></span>Memuat data...</td></tr></tbody>
       </table>
     </div>
@@ -386,9 +386,16 @@ function toast(msg,type='ok'){
   clearTimeout(t._t);t._t=setTimeout(()=>{t.className='toast'},3200);
 }
 
+// Ambil order_id langsung dari nilai kolom, tidak diubah sama sekali
+function hpToOrderId(raw){
+  if(!raw)return null;
+  return String(raw).trim(); // ambil apa adanya
+}
+
+// Normalise HP hanya untuk buka WA (wa.me butuh angka saja)
 function normaliseHP(raw){
   if(!raw)return null;
-  let hp=String(raw).trim().replace(/\D/g,'');
+  let hp=String(raw).trim().replace(/\D/g,''); // hapus spasi, strip, dash
   if(!hp||hp.length<6)return null;
   if(hp.startsWith('0'))hp='62'+hp.slice(1);
   if(!hp.startsWith('62'))hp='62'+hp;
@@ -495,7 +502,7 @@ async function loadOrders(){
         );
       return`<tr>
         <td style="font-family:monospace;font-size:12px">${o.order_id}</td>
-        <td><div style="font-weight:500">${o.nama_pelanggan}${wlBadge}</div><div style="font-size:11px;color:#888">${o.chat_id||'—'}</div></td>
+        <td><div style="font-weight:500">${o.nama_pelanggan}${wlBadge}</div></td>
         <td>${prods}</td>
         <td>${fmt(totalOrder)}</td>
         <td style="color:#0F6E56">${dibayar>0?fmt(dibayar):'—'}</td>
@@ -709,8 +716,8 @@ async function saveOrder(){
 
   const items=[{nama_produk:produk,qty,harga,fee_jastip:fee}];
   const total=calcTotalOrder(items);
-  // order_id = no HP itu sendiri
-  const order_id=chat.replace(/\D/g,'');
+  // order_id = no HP persis seperti diketik
+  const order_id=chat.trim();
 
   try{
     // Cek apakah order untuk HP ini sudah ada, jika ada merge items
@@ -833,7 +840,7 @@ function quickPayFor(id,nama,sisa){
 
 async function savePayment(){
   const rawId=document.getElementById('pay-order-id').value.trim();
-  const order_id=rawId.replace(/\D/g,'')||rawId; // bersihkan jadi angka saja
+  const order_id=rawId; // gunakan apa adanya, jangan diubah
   const jumlah=parseFloat(document.getElementById('pay-jumlah').value)||0;
   const metode=document.getElementById('pay-metode').value;
   const catatan=document.getElementById('pay-catatan').value.trim();
@@ -1073,36 +1080,81 @@ async function handleCSV(input){
     dataLines.forEach(line=>{
       const p=parseCSVLine(line);
       if(p.length<4)return;
-      const chat_id    =String(p[0]||'').trim();
+      const rawHP     =String(p[0]||'').trim();
       const nama_produk=String(p[1]||'').trim();
       const qty        =parseFloat(p[2])||1;
       const harga      =parseFloat(p[3])||0;
       const fee_jastip =parseFloat(p[4])||0;
       const rawStatus  =String(p[6]||p[5]||'').trim();
       const status     =normaliseStatus(rawStatus);
-      if(!chat_id||!nama_produk)return;
-      if(!grouped[chat_id]){
-        grouped[chat_id]={
-          chat_id,
-          order_id:chat_id.replace(/\D/g,''),
-          nama_pelanggan:chat_id,
+      if(!rawHP||!nama_produk)return;
+
+      // ── Normalisasi no HP ke format standar (kunci utama) ──
+      const order_id=hpToOrderId(rawHP);
+      if(!order_id)return;
+
+      if(!grouped[order_id]){
+        grouped[order_id]={
+          chat_id:order_id,
+          order_id,
+          nama_pelanggan:order_id,
           items:[]
         };
       }
-      grouped[chat_id].items.push({nama_produk,qty,harga,fee_jastip,wl:status==='WL',lunas:status==='LUNAS'});
+      grouped[order_id].items.push({
+        nama_produk,qty,harga,fee_jastip,
+        wl:status==='WL',
+        lunas:status==='LUNAS'
+      });
     });
 
     const imported=Object.values(grouped).filter(o=>o.items.length>0);
-    let added=0,updated=0,lunasAuto=0,wlToTagih=0,perubahan=[];
+    let added=0,updated=0,lunasAuto=0,wlToTagih=0,dupFixed=0,perubahan=[];
+
+    // Ambil nama pelanggan dari DB customers sekaligus
+    const allHPs=imported.map(o=>o.order_id);
+    let custMap={};
+    try{
+      const custs=await sbGet('customers',`hp=in.(${allHPs.map(h=>`"${h}"`).join(',')})&select=hp,nama`);
+      custs.forEach(c=>custMap[c.hp]=c.nama);
+    }catch{}
 
     for(const imp of imported){
+      // Gunakan nama dari DB customers jika ada
+      imp.nama_pelanggan=custMap[imp.order_id]||imp.order_id;
       const nonWL =imp.items.filter(it=>!it.wl);
       const wlItems=imp.items.filter(it=>it.wl);
       const totalBaru=nonWL.reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
       const semuaWL=nonWL.length===0;
 
       try{
-        const existing=await sbGet('orders',`order_id=eq.${imp.order_id}`);
+        // ── Cari order: by order_id dulu, fallback by chat_id ──
+        let existingByOrderId=await sbGet('orders',`order_id=eq.${encodeURIComponent(imp.order_id)}`);
+        let existingByChat   =await sbGet('orders',`chat_id=eq.${encodeURIComponent(imp.order_id)}&order=created_at.asc`);
+
+        // Gabungkan, deduplikasi by order_id
+        const allFound=[...existingByOrderId];
+        existingByChat.forEach(o=>{if(!allFound.find(x=>x.order_id===o.order_id))allFound.push(o);});
+
+        // Jika ada duplikat (2+ order dengan HP sama), hapus yang lebih baru, pakai yang pertama
+        if(allFound.length>1){
+          const toDelete=allFound.slice(1);
+          dupFixed+=toDelete.length;
+          for(const dup of toDelete){
+            // Pindahkan payments ke order pertama sebelum hapus
+            await sbPatch('payments',`order_id=eq.${dup.order_id}`,{order_id:allFound[0].order_id});
+            await sbDelete('orders',`order_id=eq.${dup.order_id}`);
+          }
+        }
+
+        // Pastikan order_id di-rename ke format standar jika belum
+        if(allFound.length&&allFound[0].order_id!==imp.order_id){
+          await sbPatch('payments',`order_id=eq.${allFound[0].order_id}`,{order_id:imp.order_id});
+          await sbPatch('orders',`order_id=eq.${allFound[0].order_id}`,{order_id:imp.order_id,chat_id:imp.order_id});
+          allFound[0].order_id=imp.order_id;
+        }
+
+        const existing=allFound.slice(0,1);
         const pays=await sbGet('payments',`order_id=eq.${imp.order_id}`);
         const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
 
@@ -1214,7 +1266,8 @@ async function handleCSV(input){
       `  + ${added} order baru\n`+
       `  ↻ ${updated} order diperbarui (tidak ada baris duplikat)\n`+
       `  ✓ ${lunasAuto} otomatis LUNAS\n`+
-      `  🔔 ${wlToTagih} item WL → Belum Lunas (siap ditagih)\n`;
+      `  🔔 ${wlToTagih} item WL → Belum Lunas (siap ditagih)\n`+
+      (dupFixed>0?`  🧹 ${dupFixed} duplikat no HP dihapus & digabung\n`:'');
 
     if(perubahan.length){
       logText+=`\n⚠️ Perubahan status item (${perubahan.length} order):\n`;
