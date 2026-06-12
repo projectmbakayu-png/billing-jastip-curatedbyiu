@@ -356,14 +356,12 @@ async function sbRPC(fn, params={}){
 }
 
 async function findOrderById(order_id){
-  // Coba RPC dulu (paling akurat), fallback ke GET biasa
   try{
     const res=await sbRPC('get_order_by_id',{p_order_id:order_id});
     if(res&&res.length)return res;
   }catch{}
-  // Fallback: GET dengan encoding manual
   try{
-    const res=await sbGet('orders',`order_id=eq.${encodeURIComponent(order_id)}`);
+    const res=await sbGet('orders',`order_id=eq.${sbEncode(order_id)}`);
     if(res&&res.length)return res;
   }catch{}
   return[];
@@ -375,7 +373,7 @@ async function findOrderByChat(chat_id){
     if(res&&res.length)return res;
   }catch{}
   try{
-    return await sbGet('orders',`chat_id=eq.${encodeURIComponent(chat_id)}`);
+    return await sbGet('orders',`chat_id=eq.${sbEncode(chat_id)}`);
   }catch{}
   return[];
 }
@@ -391,15 +389,34 @@ async function sbPatch(table, match, body){
 }
 
 // Patch/delete by order_id yang mungkin punya karakter spesial
+// Encode value untuk Supabase filter — spasi pakai %20, karakter lain aman
+function sbEncode(val){
+  return String(val).split('').map(c=>{
+    if(c===' ')return '%20';
+    if(c==='-')return '-';
+    if(c==='+')return '%2B';
+    return encodeURIComponent(c);
+  }).join('');
+}
+
+// Update order by order_id — pakai upsert (merge by PK) agar tidak kena masalah encoding URL
 async function sbPatchOrderId(table, order_id, body){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}?order_id=eq.${encodeURIComponent(order_id)}`,{
-    method:'PATCH',headers:{...HEADERS,'Prefer':'return=representation'},body:JSON.stringify(body)
+  // Gabungkan order_id ke body lalu upsert — primary key match dijamin exact
+  const payload={...body, order_id};
+  const r=await fetch(`${SB_URL}/rest/v1/${table}`,{
+    method:'POST',
+    headers:{...HEADERS,'Prefer':'resolution=merge-duplicates,return=representation'},
+    body:JSON.stringify(payload)
   });
-  if(!r.ok)throw new Error(await r.text());
+  if(!r.ok){
+    const msg=await r.text();
+    throw new Error(msg);
+  }
   return r.json();
 }
+
 async function sbDeleteOrderId(table, order_id){
-  const r=await fetch(`${SB_URL}/rest/v1/${table}?order_id=eq.${encodeURIComponent(order_id)}`,{
+  const r=await fetch(`${SB_URL}/rest/v1/${table}?order_id=eq.${sbEncode(order_id)}`,{
     method:'DELETE',headers:HEADERS
   });
   if(!r.ok)throw new Error(await r.text());
@@ -587,7 +604,7 @@ async function openDetail(id){
   try{
     const [orders,pays]=await Promise.all([
       findOrderById(id),
-      sbGet('payments',`order_id=eq.${id}&order=created_at.asc`)
+      sbGet('payments',`order_id=eq.${sbEncode(id)}&order=created_at.asc`)
     ]);
     const o=orders[0];if(!o)return;
 
@@ -685,7 +702,7 @@ async function doTagih(id){
   try{
     const [orders,pays]=await Promise.all([
       findOrderById(id),
-      sbGet('payments',`order_id=eq.${id}`)
+      sbGet('payments',`order_id=eq.${sbEncode(id)}`)
     ]);
     const o=orders[0];
     if(!o||o.status==='LUNAS')return;
@@ -865,7 +882,7 @@ async function selectOrderForPay(id){
   try{
     const [orders,pays]=await Promise.all([
       findOrderById(id),
-      sbGet('payments',`order_id=eq.${id}`)
+      sbGet('payments',`order_id=eq.${sbEncode(id)}`)
     ]);
     const o=orders[0];if(!o)return;
     const totalOrder=o.total_order||calcTotalOrder(o.items);
@@ -903,7 +920,7 @@ async function savePayment(){
     if(!ords.length){toast('No HP / Order tidak ditemukan','err');return}
     const o=ords[0];
     await sbPost('payments',{order_id,jumlah,metode,catatan,created_at});
-    const pays=await sbGet('payments',`order_id=eq.${order_id}`);
+    const pays=await sbGet('payments',`order_id=eq.${sbEncode(order_id)}`);
     const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
     const totalOrder=o.total_order||calcTotalOrder(o.items);
     const sisa=Math.max(0,totalOrder-totalDibayar);
@@ -945,7 +962,7 @@ async function handlePayCSV(input){
         if(!ords.length){skipped++;continue}
         const o=ords[0];
         await sbPost('payments',{order_id,jumlah,metode:'Transfer (import)',catatan:'Import CSV',created_at});
-        const pays=await sbGet('payments',`order_id=eq.${order_id}`);
+        const pays=await sbGet('payments',`order_id=eq.${sbEncode(order_id)}`);
         const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
         const totalOrder=o.total_order||calcTotalOrder(o.items);
         const sisa=Math.max(0,totalOrder-totalDibayar);
@@ -976,7 +993,7 @@ async function deletePayment(payId, orderId){
     await sbDelete('payments',`id=eq.${payId}`);
     const [ords,pays]=await Promise.all([
       findOrderById(orderId),
-      sbGet('payments',`order_id=eq.${orderId}`)
+      sbGet('payments',`order_id=eq.${sbEncode(orderId)}`)
     ]);
     const o=ords[0];
     if(o&&o.status==='LUNAS'){
@@ -1193,20 +1210,20 @@ async function handleCSV(input){
           dupFixed+=toDelete.length;
           for(const dup of toDelete){
             // Pindahkan payments ke order pertama sebelum hapus
-            await sbPatch('payments',`order_id=eq.${dup.order_id}`,{order_id:allFound[0].order_id});
+            await sbPatch('payments',`order_id=eq.${sbEncode(dup.order_id)}`,{order_id:allFound[0].order_id});
             await sbDeleteOrderId('orders',dup.order_id);
           }
         }
 
         // Pastikan order_id di-rename ke format standar jika belum
         if(allFound.length&&allFound[0].order_id!==imp.order_id){
-          await sbPatch('payments',`order_id=eq.${allFound[0].order_id}`,{order_id:imp.order_id});
+          await sbPatch('payments',`order_id=eq.${sbEncode(allFound[0].order_id)}`,{order_id:imp.order_id});
           await sbPatchOrderId('orders',allFound[0].order_id,{order_id:imp.order_id,chat_id:imp.order_id});
           allFound[0].order_id=imp.order_id;
         }
 
         const existing=allFound.slice(0,1);
-        const pays=await sbGet('payments',`order_id=eq.${imp.order_id}`);
+        const pays=await sbGet('payments',`order_id=eq.${sbEncode(imp.order_id)}`);
         const totalDibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
 
         if(existing.length){
