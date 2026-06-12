@@ -1134,126 +1134,209 @@ async function loadHistory(){
 // CSV IMPORT — sisa = total baru - pembayaran lama
 // ══════════════════════════════════════════
 async function handleCSV(input){
-  const file=input.files[0];if(!file)return;
+  const file=input.files[0]; if(!file)return;
   const logEl=document.getElementById('import-log');
-  logEl.style.display='block';logEl.textContent='Memproses CSV...';
+  logEl.style.display='block';
+  logEl.textContent='Memproses CSV...';
+
   const reader=new FileReader();
   reader.onload=async e=>{
     const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
-    if(lines.length<2){toast('CSV kosong','err');input.value='';return}
-    const dataLines=lines.slice(1);
+    if(lines.length<2){toast('CSV kosong','err');input.value='';return;}
 
-    // Parse CSV: kolom 1=no HP (order_id), 2=produk, 3=qty, 4=harga, 5=fee, 6=total(skip), 7=status
-    const grouped={};
+    // ── FORMAT EXCEL ──────────────────────────────────────────
+    // Kolom: order_id(noHP) | nama_produk | qty | harga | fee_jastip | total(skip) | status
+    // Indeks:      0        |      1      |  2  |   3   |     4      |      5      |   6
+    // order_id = no HP pelanggan, apa adanya dari Excel
+    // Baris dengan no HP sama → digabung jadi 1 order
+    // ─────────────────────────────────────────────────────────
+
+    const dataLines=lines.slice(1); // skip header
+    const grouped={}; // key = no HP digits only (untuk grouping), value = order object
+
     dataLines.forEach(line=>{
-      const p=parseCSVLine(line);
-      if(p.length<4)return;
-      const order_id   =String(p[0]||'').trim();
-      const nama_produk=String(p[1]||'').trim();
-      const qty        =parseFloat(p[2])||1;
-      const harga      =parseFloat(p[3])||0;
-      const fee_jastip =parseFloat(p[4])||0;
-      const rawStatus  =String(p[6]||p[5]||'').trim();
+      const col=parseCSVLine(line);
+      if(col.length<3)return;
+
+      const noHP       =String(col[0]||'').trim();
+      const nama_produk=String(col[1]||'').trim();
+      const qty        =Math.abs(parseFloat(col[2])||0); // qty, bukan dikalikan apapun
+      const harga      =Math.abs(parseFloat(col[3])||0);
+      const fee_jastip =Math.abs(parseFloat(col[4])||0);
+      // col[5] = total dari excel → DIABAIKAN, kita hitung sendiri
+      const rawStatus  =String(col[6]||'').trim();
       const status     =normaliseStatus(rawStatus);
-      if(!order_id||!nama_produk)return;
-      if(!grouped[order_id]){
-        grouped[order_id]={order_id,chat_id:order_id,nama_pelanggan:order_id,items:[]};
+
+      if(!noHP||!nama_produk||qty<=0)return;
+
+      // Kunci group = angka saja → "62 823-5330-8483" = "6282353308483"
+      const key=noHP.replace(/\D/g,'');
+      if(!key||key.length<6)return;
+
+      if(!grouped[key]){
+        grouped[key]={
+          order_id: noHP,   // simpan format asli dari baris pertama
+          chat_id:  noHP,
+          items:    []
+        };
       }
-      grouped[order_id].items.push({nama_produk,qty,harga,fee_jastip,wl:status==='WL',lunas:status==='LUNAS'});
+
+      grouped[key].items.push({
+        nama_produk,
+        qty,
+        harga,
+        fee_jastip,
+        wl:    status==='WL',
+        lunas: status==='LUNAS'
+      });
     });
 
     const imported=Object.values(grouped).filter(o=>o.items.length>0);
-    let added=0,updated=0,lunasAuto=0,wlToTagih=0,perubahan=[];
+    if(!imported.length){toast('Tidak ada data valid di CSV','err');input.value='';return;}
 
-    // Ambil semua data sekaligus lalu filter di JS (hindari masalah URL encoding spasi/strip)
-    let allOrdersDB=[],allPayDB=[],custMap={};
+    // ── Ambil semua data dari DB sekaligus ──────────────────
+    // Filter dilakukan di JS bukan di URL → aman untuk format no HP apapun
+    let allOrders=[], allPays=[], custMap={};
     try{
-      allOrdersDB=await sbGet('orders','select=order_id,chat_id,nama_pelanggan,status,items,total_order&limit=2000');
-      allPayDB   =await sbGet('payments','select=order_id,jumlah&limit=10000');
-      const custs=await sbGet('customers','select=hp,nama&limit=2000');
-      custs.forEach(c=>custMap[c.hp]=c.nama);
-    }catch(err){console.error('fetch all error',err);}
+      [allOrders, allPays]=await Promise.all([
+        sbGet('orders','select=order_id,chat_id,nama_pelanggan,status,items,total_order&limit=5000'),
+        sbGet('payments','select=order_id,jumlah&limit=20000')
+      ]);
+      const custs=await sbGet('customers','select=hp,nama&limit=5000');
+      custs.forEach(c=>custMap[c.hp.replace(/\D/g,'')]=c.nama);
+    }catch(err){console.error('DB fetch error',err);}
 
-    // Buat map — exact JS string match, tidak lewat URL
-    const orderMap={};
-    allOrdersDB.forEach(o=>orderMap[o.order_id]=o);
+    // Map: digits → order object dari DB
+    const dbMap={};
+    allOrders.forEach(o=>{
+      const key=String(o.order_id).replace(/\D/g,'');
+      if(!dbMap[key])dbMap[key]=o;
+    });
+
+    // Map: digits → total sudah dibayar
     const payMap={};
-    allPayDB.forEach(p=>{payMap[p.order_id]=(payMap[p.order_id]||0)+Number(p.jumlah);});
+    allPays.forEach(p=>{
+      const key=String(p.order_id).replace(/\D/g,'');
+      payMap[key]=(payMap[key]||0)+Number(p.jumlah);
+    });
+
+    let added=0, updated=0, lunasAuto=0, wlToTagih=0, perubahan=[];
 
     for(const imp of imported){
-      imp.nama_pelanggan=custMap[imp.order_id]||imp.order_id;
+      const key=imp.order_id.replace(/\D/g,'');
+
+      // Nama pelanggan dari customers DB jika ada
+      imp.nama_pelanggan=custMap[key]||imp.order_id;
+
+      // Total tagihan = hanya item non-WL: qty × (harga + fee_jastip)
       const nonWL   =imp.items.filter(it=>!it.wl);
-      const totalBaru=nonWL.reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
       const semuaWL =nonWL.length===0;
-      const existing=orderMap[imp.order_id]; // exact match di JS
-      const totalDibayar=payMap[imp.order_id]||0;
+      const totalBaru=nonWL.reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
+
+      // Total sudah dibayar dari history payments
+      const totalDibayar=payMap[key]||0;
+      const sisa =Math.max(0,totalBaru-totalDibayar);
+      const lebih=Math.max(0,totalDibayar-totalBaru);
+
+      const existing=dbMap[key]; // order yang sudah ada di DB
 
       try{
         if(existing){
-          // UPDATE — order sudah ada
-          const o=existing;
-          const lama={};
-          (o.items||[]).forEach(it=>lama[it.nama_produk]=it);
-          let wlKeTagih=0,tagihKeWL=0;
-          imp.items.forEach(it=>{
-            const l=lama[it.nama_produk];if(!l)return;
-            const v=it.qty*(it.harga+(it.fee_jastip||0));
-            if(l.wl&&!it.wl)wlKeTagih+=v;
-            else if(!l.wl&&it.wl)tagihKeWL+=v;
+          // ── UPDATE order yang sudah ada ──────────────────
+          // Jangan hapus, jangan buat baru — update items & total saja
+          const itemsLama={};
+          (existing.items||[]).forEach(it=>itemsLama[it.nama_produk]=it);
+
+          // Deteksi perubahan WL ↔ tagihan
+          let wlJadiTagih=0, tagihJadiWL=0;
+          imp.items.forEach(itBaru=>{
+            const itLama=itemsLama[itBaru.nama_produk];
+            if(!itLama)return;
+            const nilai=itBaru.qty*(itBaru.harga+(itBaru.fee_jastip||0));
+            if(itLama.wl&&!itBaru.wl) wlJadiTagih+=nilai;
+            if(!itLama.wl&&itBaru.wl) tagihJadiWL+=nilai;
           });
-          const sisa=Math.max(0,totalBaru-totalDibayar);
-          const lebih=Math.max(0,totalDibayar-totalBaru);
+
+          // Status baru
           let newStatus;
-          if(semuaWL)                             newStatus='WL';
-          else if(lebih>0||(sisa<=0&&totalBaru>0))newStatus='LUNAS';
-          else if(wlKeTagih>0)                    newStatus='BELUM LUNAS';
-          else                                    newStatus=o.status==='WL'?'BELUM LUNAS':o.status;
+          if(semuaWL)                              newStatus='WL';
+          else if(lebih>0||(sisa<=0&&totalBaru>0)) newStatus='LUNAS';
+          else if(wlJadiTagih>0)                   newStatus='BELUM LUNAS';
+          else                                     newStatus=existing.status==='WL'?'BELUM LUNAS':existing.status;
 
-          if(tagihKeWL>0){
-            const pw=buildPesanPerubahanWL(imp,tagihKeWL,sisa,lebih,totalDibayar);
-            perubahan.push({order_id:imp.order_id,nama:o.nama_pelanggan,tagihKeWL,wlKeTagih,sisa,lebih,pw});
-            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,
-              chat_id:o.chat_id,total:totalBaru,
-              aksi:lebih>0?`Perubahan WL — Kelebihan ${fmt(lebih)}`:`Perubahan WL — Sisa ${fmt(sisa)}`,pesan:pw});
+          // Catat perubahan WL → tagihan (notifikasi)
+          if(tagihJadiWL>0){
+            const pw=buildPesanPerubahanWL(imp,tagihJadiWL,sisa,lebih,totalDibayar);
+            perubahan.push({id:imp.order_id,nama:existing.nama_pelanggan,tagihJadiWL,wlJadiTagih,sisa,lebih,pw});
+            await sbPost('tagihan_history',{
+              order_id:existing.order_id,
+              pelanggan:existing.nama_pelanggan,
+              chat_id:existing.chat_id,
+              total:totalBaru,
+              aksi:lebih>0?`Perubahan WL — Kelebihan ${fmt(lebih)}`:`Perubahan WL — Sisa ${fmt(sisa)}`,
+              pesan:pw
+            });
           }
-          if((sisa<=0||lebih>0)&&o.status!=='LUNAS'&&!semuaWL){
+          if((sisa<=0||lebih>0)&&existing.status!=='LUNAS'&&!semuaWL){
             lunasAuto++;
-            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,
-              chat_id:o.chat_id,total:totalBaru,aksi:'LUNAS (import CSV)',pesan:''});
+            await sbPost('tagihan_history',{
+              order_id:existing.order_id,pelanggan:existing.nama_pelanggan,
+              chat_id:existing.chat_id,total:totalBaru,aksi:'LUNAS (import CSV)',pesan:''
+            });
           }
-          if(wlKeTagih>0&&newStatus!=='LUNAS')wlToTagih++;
+          if(wlJadiTagih>0&&newStatus!=='LUNAS')wlToTagih++;
 
-          // Upsert by PK — tidak pakai URL filter, tidak ada masalah encoding
+          // Upsert by primary key — tidak ada URL filter, tidak ada encoding problem
           await sbUpsert('orders',{
-            order_id:imp.order_id,chat_id:o.chat_id,nama_pelanggan:o.nama_pelanggan,
-            items:imp.items,total_order:totalBaru,status:newStatus,
-            updated_at:new Date().toISOString()
+            order_id:    existing.order_id,   // pakai order_id yang sudah ada di DB
+            chat_id:     existing.chat_id,
+            nama_pelanggan: existing.nama_pelanggan,
+            items:       imp.items,
+            total_order: totalBaru,
+            status:      newStatus,
+            updated_at:  new Date().toISOString()
           });
           updated++;
-        } else {
-          // INSERT — order baru
+
+        }else{
+          // ── INSERT order baru ────────────────────────────
           await sbUpsert('orders',{
-            order_id:imp.order_id,chat_id:imp.order_id,
+            order_id:      imp.order_id,
+            chat_id:       imp.order_id,
             nama_pelanggan:imp.nama_pelanggan,
-            status:semuaWL?'WL':'BELUM LUNAS',
-            items:imp.items,total_order:totalBaru
+            status:        semuaWL?'WL':'BELUM LUNAS',
+            items:         imp.items,
+            total_order:   totalBaru
           });
           await sbUpsert('customers',{hp:imp.order_id,nama:imp.order_id,kota:'',note:''});
           added++;
         }
-      }catch(err){console.error('Error:',imp.order_id,err);}
+      }catch(err){
+        console.error('Error processing order',imp.order_id,err);
+      }
     }
 
-    let log=`Import selesai\n${'─'.repeat(28)}\n+ ${added} order baru\n↻ ${updated} diperbarui\n✓ ${lunasAuto} otomatis LUNAS\n🔔 ${wlToTagih} WL → Belum Lunas`;
+    // ── Log hasil ───────────────────────────────────────────
+    let log=
+      `Import selesai\n`+
+      `─────────────────────────\n`+
+      `+ ${added} order baru\n`+
+      `↻ ${updated} order diperbarui\n`+
+      `✓ ${lunasAuto} otomatis LUNAS\n`+
+      `🔔 ${wlToTagih} item WL → siap ditagih`;
+
     if(perubahan.length){
       log+=`\n\n⚠️ Perubahan WL (${perubahan.length} order):`;
       perubahan.forEach(p=>{
-        log+=`\n${p.order_id}`;
-        if(p.tagihKeWL>0)log+=`\n  Masuk WL: −${fmt(p.tagihKeWL)}`;
-        if(p.wlKeTagih>0)log+=`\n  Dari WL: +${fmt(p.wlKeTagih)}`;
-        log+=p.lebih>0?`\n  ✅ Kelebihan: ${fmt(p.lebih)}`:p.sisa>0?`\n  ⚠️ Sisa: ${fmt(p.sisa)}`:'';
+        log+=`\n${p.id} — ${p.nama}`;
+        if(p.tagihJadiWL>0) log+=`\n  Masuk WL: −${fmt(p.tagihJadiWL)}`;
+        if(p.wlJadiTagih>0) log+=`\n  Dari WL:  +${fmt(p.wlJadiTagih)}`;
+        if(p.lebih>0)       log+=`\n  ✅ Kelebihan: ${fmt(p.lebih)}`;
+        else if(p.sisa>0)   log+=`\n  ⚠️ Sisa: ${fmt(p.sisa)}`;
       });
+      log+=`\n\nPesan notifikasi tersimpan di Histori.`;
     }
+
     logEl.textContent=log;
     toast(`Import: ${added} baru, ${updated} diperbarui`);
     input.value='';
