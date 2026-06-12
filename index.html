@@ -1136,14 +1136,14 @@ async function loadHistory(){
 async function handleCSV(input){
   const file=input.files[0];if(!file)return;
   const logEl=document.getElementById('import-log');
-  logEl.style.display='block';logEl.textContent='⏳ Memproses CSV...';
+  logEl.style.display='block';logEl.textContent='Memproses CSV...';
   const reader=new FileReader();
   reader.onload=async e=>{
     const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
     if(lines.length<2){toast('CSV kosong','err');input.value='';return}
     const dataLines=lines.slice(1);
 
-    // Parse CSV → grouped per no HP (order_id = persis dari kolom 1, tidak diubah)
+    // Parse CSV: kolom 1=no HP (order_id), 2=produk, 3=qty, 4=harga, 5=fee, 6=total(skip), 7=status
     const grouped={};
     dataLines.forEach(line=>{
       const p=parseCSVLine(line);
@@ -1165,125 +1165,102 @@ async function handleCSV(input){
     const imported=Object.values(grouped).filter(o=>o.items.length>0);
     let added=0,updated=0,lunasAuto=0,wlToTagih=0,perubahan=[];
 
-    // Ambil SEMUA orders sekaligus — filter di client, hindari masalah URL encoding
-    let allOrdersDB=[];
-    let allPaymentsDB=[];
-    let custMap={};
+    // Ambil semua data sekaligus lalu filter di JS (hindari masalah URL encoding spasi/strip)
+    let allOrdersDB=[],allPayDB=[],custMap={};
     try{
-      allOrdersDB=await sbGet('orders','select=order_id,chat_id,nama_pelanggan,status,items,total_order&limit=1000');
-      allPaymentsDB=await sbGet('payments','select=order_id,jumlah&limit=5000');
-      const custs=await sbGet('customers','select=hp,nama&limit=1000');
+      allOrdersDB=await sbGet('orders','select=order_id,chat_id,nama_pelanggan,status,items,total_order&limit=2000');
+      allPayDB   =await sbGet('payments','select=order_id,jumlah&limit=10000');
+      const custs=await sbGet('customers','select=hp,nama&limit=2000');
       custs.forEach(c=>custMap[c.hp]=c.nama);
-    }catch(err){console.error('Fetch error',err)}
+    }catch(err){console.error('fetch all error',err);}
 
-    // Buat map untuk lookup cepat — exact string match di JS, bukan di URL
+    // Buat map — exact JS string match, tidak lewat URL
     const orderMap={};
     allOrdersDB.forEach(o=>orderMap[o.order_id]=o);
-
-    // Payment map: order_id → total dibayar
     const payMap={};
-    allPaymentsDB.forEach(p=>{payMap[p.order_id]=(payMap[p.order_id]||0)+Number(p.jumlah)});
+    allPayDB.forEach(p=>{payMap[p.order_id]=(payMap[p.order_id]||0)+Number(p.jumlah);});
 
     for(const imp of imported){
       imp.nama_pelanggan=custMap[imp.order_id]||imp.order_id;
-      const nonWL  =imp.items.filter(it=>!it.wl);
+      const nonWL   =imp.items.filter(it=>!it.wl);
       const totalBaru=nonWL.reduce((s,it)=>s+it.qty*(it.harga+(it.fee_jastip||0)),0);
-      const semuaWL=nonWL.length===0;
-
-      // Cari order existing — exact match di JavaScript
-      const existing=orderMap[imp.order_id];
+      const semuaWL =nonWL.length===0;
+      const existing=orderMap[imp.order_id]; // exact match di JS
       const totalDibayar=payMap[imp.order_id]||0;
 
       try{
         if(existing){
-          // ORDER SUDAH ADA — update items & total
+          // UPDATE — order sudah ada
           const o=existing;
-          const itemsLamaMap={};
-          (o.items||[]).forEach(it=>itemsLamaMap[it.nama_produk]={...it});
-
-          let selisihWLkeTagih=0,selisihTagihkeWL=0;
-          imp.items.forEach(itBaru=>{
-            const itLama=itemsLamaMap[itBaru.nama_produk];
-            if(!itLama)return;
-            const nilai=itBaru.qty*(itBaru.harga+(itBaru.fee_jastip||0));
-            if(itLama.wl&&!itBaru.wl)selisihWLkeTagih+=nilai;
-            else if(!itLama.wl&&itBaru.wl)selisihTagihkeWL+=nilai;
+          const lama={};
+          (o.items||[]).forEach(it=>lama[it.nama_produk]=it);
+          let wlKeTagih=0,tagihKeWL=0;
+          imp.items.forEach(it=>{
+            const l=lama[it.nama_produk];if(!l)return;
+            const v=it.qty*(it.harga+(it.fee_jastip||0));
+            if(l.wl&&!it.wl)wlKeTagih+=v;
+            else if(!l.wl&&it.wl)tagihKeWL+=v;
           });
-
           const sisa=Math.max(0,totalBaru-totalDibayar);
           const lebih=Math.max(0,totalDibayar-totalBaru);
-
           let newStatus;
-          if(semuaWL)                        newStatus='WL';
-          else if(lebih>0||sisa<=0&&totalBaru>0) newStatus='LUNAS';
-          else if(selisihWLkeTagih>0)         newStatus='BELUM LUNAS';
-          else                                newStatus=o.status==='WL'?'BELUM LUNAS':o.status;
+          if(semuaWL)                             newStatus='WL';
+          else if(lebih>0||(sisa<=0&&totalBaru>0))newStatus='LUNAS';
+          else if(wlKeTagih>0)                    newStatus='BELUM LUNAS';
+          else                                    newStatus=o.status==='WL'?'BELUM LUNAS':o.status;
 
-          if(selisihTagihkeWL>0){
-            const pesanWL=buildPesanPerubahanWL(imp,selisihTagihkeWL,sisa,lebih,totalDibayar);
-            perubahan.push({order_id:imp.order_id,nama:o.nama_pelanggan,selisihTagihkeWL,selisihWLkeTagih,sisa,lebih,pesanWL});
-            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalBaru,
-              aksi:lebih>0?`Perubahan WL — Kelebihan ${fmt(lebih)}`:`Perubahan WL — Sisa ${fmt(sisa)}`,pesan:pesanWL});
+          if(tagihKeWL>0){
+            const pw=buildPesanPerubahanWL(imp,tagihKeWL,sisa,lebih,totalDibayar);
+            perubahan.push({order_id:imp.order_id,nama:o.nama_pelanggan,tagihKeWL,wlKeTagih,sisa,lebih,pw});
+            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,
+              chat_id:o.chat_id,total:totalBaru,
+              aksi:lebih>0?`Perubahan WL — Kelebihan ${fmt(lebih)}`:`Perubahan WL — Sisa ${fmt(sisa)}`,pesan:pw});
           }
           if((sisa<=0||lebih>0)&&o.status!=='LUNAS'&&!semuaWL){
             lunasAuto++;
-            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,chat_id:o.chat_id,total:totalBaru,aksi:'LUNAS (import CSV)',pesan:''});
+            await sbPost('tagihan_history',{order_id:imp.order_id,pelanggan:o.nama_pelanggan,
+              chat_id:o.chat_id,total:totalBaru,aksi:'LUNAS (import CSV)',pesan:''});
           }
-          if(selisihWLkeTagih>0&&newStatus!=='LUNAS')wlToTagih++;
+          if(wlKeTagih>0&&newStatus!=='LUNAS')wlToTagih++;
 
-          // Upsert by primary key — tidak pakai URL filter sama sekali
+          // Upsert by PK — tidak pakai URL filter, tidak ada masalah encoding
           await sbUpsert('orders',{
-            order_id:imp.order_id,
-            chat_id:o.chat_id,
-            nama_pelanggan:o.nama_pelanggan,
-            items:imp.items,
-            total_order:totalBaru,
-            status:newStatus,
+            order_id:imp.order_id,chat_id:o.chat_id,nama_pelanggan:o.nama_pelanggan,
+            items:imp.items,total_order:totalBaru,status:newStatus,
             updated_at:new Date().toISOString()
           });
           updated++;
-
         } else {
-          // ORDER BARU
+          // INSERT — order baru
           await sbUpsert('orders',{
-            order_id:imp.order_id,
-            chat_id:imp.order_id,
+            order_id:imp.order_id,chat_id:imp.order_id,
             nama_pelanggan:imp.nama_pelanggan,
             status:semuaWL?'WL':'BELUM LUNAS',
-            items:imp.items,
-            total_order:totalBaru
+            items:imp.items,total_order:totalBaru
           });
           await sbUpsert('customers',{hp:imp.order_id,nama:imp.order_id,kota:'',note:''});
           added++;
         }
-      }catch(err){console.error('Error order',imp.order_id,err)}
+      }catch(err){console.error('Error:',imp.order_id,err);}
     }
 
-    let logText=
-      `✅ Import selesai\n`+
-      `${'─'.repeat(32)}\n`+
-      `  + ${added} order baru\n`+
-      `  ↻ ${updated} order diperbarui\n`+
-      `  ✓ ${lunasAuto} otomatis LUNAS\n`+
-      `  🔔 ${wlToTagih} item WL → Belum Lunas\n`;
+    let log=`Import selesai\n${'─'.repeat(28)}\n+ ${added} order baru\n↻ ${updated} diperbarui\n✓ ${lunasAuto} otomatis LUNAS\n🔔 ${wlToTagih} WL → Belum Lunas`;
     if(perubahan.length){
-      logText+=`\n⚠️ Perubahan WL (${perubahan.length} order):\n`;
+      log+=`\n\n⚠️ Perubahan WL (${perubahan.length} order):`;
       perubahan.forEach(p=>{
-        logText+=`\n  ${p.order_id}\n`;
-        if(p.selisihTagihkeWL>0)logText+=`    Masuk WL: −${fmt(p.selisihTagihkeWL)}\n`;
-        if(p.selisihWLkeTagih>0)logText+=`    Dari WL: +${fmt(p.selisihWLkeTagih)}\n`;
-        if(p.lebih>0)           logText+=`    ✅ Kelebihan: ${fmt(p.lebih)}\n`;
-        else if(p.sisa>0)       logText+=`    ⚠️ Sisa: ${fmt(p.sisa)}\n`;
+        log+=`\n${p.order_id}`;
+        if(p.tagihKeWL>0)log+=`\n  Masuk WL: −${fmt(p.tagihKeWL)}`;
+        if(p.wlKeTagih>0)log+=`\n  Dari WL: +${fmt(p.wlKeTagih)}`;
+        log+=p.lebih>0?`\n  ✅ Kelebihan: ${fmt(p.lebih)}`:p.sisa>0?`\n  ⚠️ Sisa: ${fmt(p.sisa)}`:'';
       });
     }
-    logEl.textContent=logText;
+    logEl.textContent=log;
     toast(`Import: ${added} baru, ${updated} diperbarui`);
     input.value='';
     loadOrders();
   };
   reader.readAsText(file);
 }
-
 
 // Bangun pesan WA khusus perubahan WL
 function buildPesanPerubahanWL(imp,selisihTagihkeWL,sisa,lebih,totalDibayar){
