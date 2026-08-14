@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Billing Jastip</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,sans-serif;font-size:14px;color:#1a1a1a;background:#f5f5f3;min-height:100vh}
+.wrap{max-width:980px;margin:0 auto;padding:1.25rem 1rem}
+h1{font-size:17px;font-weight:600;margin-bottom:2px}
+.sub{font-size:12px;color:#888;margin-bottom:1rem}
+nav{display:flex;border-bottom:1px solid #ddd;margin-bottom:1rem;overflow-x:auto}
+.tab{font-size:13px;padding:8px 15px;cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;color:#777;white-space:nowrap;font-family:inherit}
+.tab.on{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:500}
+.pg{display:none;flex-direction:column;gap:.9rem}
+.pg.on{display:flex}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.stat{background:#fff;border-radius:9px;border:.5px solid #e0e0e0;padding:.65rem .9rem}
+.stat-l{font-size:11px;color:#888;margin-bottom:3px}
+.stat-v{font-size:19px;font-weight:500}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input,select,textarea{font-size:13px;padding:6px 9px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#1a1a1a;outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:#888}
+.btn{font-size:13px;padding:6px 13px;border:1px solid #ccc;border-radius:7px;background:#fff;color:#1a1a1a;cursor:pointer;font-family:inherit;white-space:nowrap}
+.btn:hover{background:#f0f0ee}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.g{border-color:#1D9E75;color:#0F6E56}.g:hover{background:#E1F5EE}
+.a{border-color:#BA7517;color:#854F0B}.a:hover{background:#FAEEDA}
+.b{border-color:#378ADD;color:#185FA5}.b:hover{background:#E6F1FB}
+.r{border-color:#E24B4A;color:#A32D2D}.r:hover{background:#FCEBEB}
+.tw{border:1px solid #e0e0e0;border-radius:9px;background:#fff;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:560px}
+thead{background:#fafaf8}
+th{font-size:11px;color:#888;font-weight:500;padding:8px 11px;text-align:left;border-bottom:1px solid #eee}
+td{padding:8px 11px;border-bottom:1px solid #eee;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#fafaf8}
+.bk{display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:999px}
+.bk-l{background:#E1F5EE;color:#0F6E56}
+.bk-t{background:#E6F1FB;color:#185FA5}
+.bk-b{background:#FAEEDA;color:#854F0B}
+.bk-w{background:#F3F0FF;color:#5B21B6}
+.acts{display:flex;gap:4px;flex-wrap:wrap}
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.42);display:none;align-items:center;justify-content:center;z-index:50;padding:1rem}
+.ov.on{display:flex}
+.modal{background:#fff;border-radius:11px;border:1px solid #ddd;padding:1.4rem;width:500px;max-width:100%;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:14px;font-weight:600;margin-bottom:.9rem}
+.mfooter{display:flex;gap:7px;margin-top:1.1rem;justify-content:flex-end;flex-wrap:wrap}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:.9rem}
+.full{grid-column:1/-1}
+.lbl{font-size:12px;color:#888;margin-bottom:3px}
+.fi{width:100%;font-size:13px;padding:6px 9px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#1a1a1a;font-family:inherit}
+.fi:focus{border-color:#888;outline:none}
+.info{font-size:12px;color:#555;background:#fafaf8;border-radius:7px;padding:.6rem .85rem;line-height:1.7;border:1px solid #eee}
+.info code{background:#e8e8e5;padding:1px 5px;border-radius:4px;font-size:11px;font-family:monospace}
+.dz{border:1.5px dashed #ccc;border-radius:9px;padding:1.75rem;text-align:center;cursor:pointer;color:#888;font-size:13px;background:#fff}
+.dz:hover{background:#fafaf8}
+.sg{position:relative;z-index:20;border:1px solid #ddd;border-radius:7px;background:#fff;display:none;max-height:140px;overflow-y:auto;margin-top:3px}
+.sg-item{padding:7px 10px;cursor:pointer;border-bottom:1px solid #f0f0ee;font-size:13px}
+.sg-item:last-child{border-bottom:none}
+.sg-item:hover{background:#f5f5f3}
+.empty{text-align:center;padding:2.5rem;color:#aaa;font-size:13px}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid #ddd;border-top-color:#888;border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;bottom:18px;right:18px;background:#fff;border:1px solid #ddd;border-radius:7px;padding:8px 15px;font-size:13px;opacity:0;transition:opacity .3s;z-index:200;pointer-events:none;max-width:280px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+.toast.on{opacity:1}
+.toast.ok{border-left:3px solid #1D9E75}
+.toast.er{border-left:3px solid #E24B4A}
+.pesan-box{font-size:12px;background:#fafaf8;border:1px solid #eee;border-radius:7px;padding:10px;white-space:pre-wrap;font-family:system-ui;line-height:1.6;max-height:200px;overflow-y:auto;color:#333}
+@media(max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}.fg{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Billing Jastip</h1>
+  <p class="sub">Tagihan otomatis berdasarkan no HP — data tersimpan di cloud</p>
+  <nav>
+    <button class="tab on" onclick="goTab('orders')">Tagihan</button>
+    <button class="tab" onclick="goTab('pay')">Pembayaran</button>
+    <button class="tab" onclick="goTab('hist')">Histori</button>
+    <button class="tab" onclick="goTab('imp')">Import / Export</button>
+    <button class="tab" onclick="goTab('cfg')">Pengaturan</button>
+  </nav>
+
+  <!-- TAGIHAN -->
+  <div id="pg-orders" class="pg on">
+    <div class="stats">
+      <div class="stat"><div class="stat-l">Total pelanggan</div><div class="stat-v" id="st0">—</div></div>
+      <div class="stat"><div class="stat-l">Belum lunas</div><div class="stat-v" style="color:#854F0B" id="st1">—</div></div>
+      <div class="stat"><div class="stat-l">Sudah lunas</div><div class="stat-v" style="color:#0F6E56" id="st2">—</div></div>
+      <div class="stat"><div class="stat-l">Total tagihan</div><div class="stat-v" style="font-size:14px" id="st3">—</div></div>
+    </div>
+    <div class="row">
+      <select id="fs" onchange="loadOrders()">
+        <option value="">Semua status</option>
+        <option value="BELUM LUNAS">Belum lunas</option>
+        <option value="TAGIHAN DIKIRIM">Tagihan dikirim</option>
+        <option value="LUNAS">Lunas</option>
+        <option value="WL">WL semua</option>
+      </select>
+      <input id="fq" placeholder="Cari no HP / nama..." style="width:200px" oninput="loadOrders()">
+      <button class="btn b" onclick="openAdd()">+ Tambah manual</button>
+      <button class="btn" onclick="loadOrders()">Refresh</button>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr><th>No HP</th><th>Nama</th><th>Item</th><th>Total</th><th>Dibayar</th><th>Sisa</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody id="tb-orders"><tr><td colspan="8" class="empty"><span class="spin"></span>Memuat...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- PEMBAYARAN -->
+  <div id="pg-pay" class="pg">
+    <div class="info">Catat pembayaran masuk. Sisa tagihan otomatis berkurang. Jika lunas → status otomatis update.</div>
+    <div style="display:flex;gap:8px;margin-bottom:.25rem">
+      <button class="btn b" id="pt-manual" onclick="switchPayTab('manual')">Input manual</button>
+      <button class="btn"   id="pt-upload" onclick="switchPayTab('upload')">Upload CSV</button>
+    </div>
+    <div id="pp-manual" style="background:#fff;border:1px solid #eee;border-radius:9px;padding:1.2rem;max-width:460px">
+      <div class="fg">
+        <div class="full">
+          <div class="lbl">No HP pelanggan</div>
+          <input class="fi" id="pay-hp" placeholder="62 823-..." oninput="cariOrderUtk()" autocomplete="off">
+          <div class="sg" id="pay-sg"></div>
+        </div>
+        <div class="full" id="pay-info" style="display:none;background:#fafaf8;border:1px solid #eee;border-radius:7px;padding:9px;font-size:13px"></div>
+        <div><div class="lbl">Nominal (Rp)</div><input class="fi" id="pay-jml" type="number" min="0" placeholder="150000"></div>
+        <div><div class="lbl">Metode</div>
+          <select class="fi" id="pay-met">
+            <option>Transfer BCA</option><option>QRIS</option><option>Transfer BRI</option>
+            <option>Transfer Mandiri</option><option>Cash</option><option>Lainnya</option>
+          </select>
+        </div>
+        <div><div class="lbl">Tanggal</div><input class="fi" id="pay-tgl" type="date"></div>
+        <div class="full"><div class="lbl">Catatan</div><input class="fi" id="pay-cat" placeholder="DP, pelunasan, dsb..."></div>
+      </div>
+      <div class="row"><button class="btn g" onclick="simpanBayar()">Simpan pembayaran</button><button class="btn" onclick="resetPayForm()">Reset</button></div>
+    </div>
+    <div id="pp-upload" style="display:none;flex-direction:column;gap:9px">
+      <div class="info"><strong>Format CSV pembayaran:</strong><br><code>no_hp</code> · <code>nominal</code> · <code>tgl (YYYY-MM-DD)</code> · <code>metode (opsional)</code><br>Header baris pertama dilewati otomatis.</div>
+      <div class="dz" onclick="document.getElementById('pay-csv').click()">Klik untuk upload CSV pembayaran<input type="file" id="pay-csv" accept=".csv" style="display:none" onchange="importPayCSV(this)"></div>
+      <div id="pay-log" class="info" style="display:none;font-family:monospace;white-space:pre-wrap"></div>
+    </div>
+    <div>
+      <div style="font-size:13px;font-weight:500;margin-bottom:.5rem">Riwayat pembayaran terbaru</div>
+      <div class="tw">
+        <table>
+          <thead><tr><th>No HP</th><th>Nama</th><th>Nominal</th><th>Metode</th><th>Tgl</th><th>Catatan</th><th>Aksi</th></tr></thead>
+          <tbody id="tb-pays"><tr><td colspan="7" class="empty"><span class="spin"></span>Memuat...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORI -->
+  <div id="pg-hist" class="pg">
+    <div class="row">
+      <input id="hq" placeholder="Cari histori..." style="width:200px" oninput="loadHist()">
+      <button class="btn r" onclick="hapusHist()">Hapus semua histori</button>
+    </div>
+    <div class="tw"><div id="hist-list" style="background:#fff"></div><div id="hist-empty" class="empty" style="display:none">Belum ada histori.</div></div>
+  </div>
+
+  <!-- IMPORT -->
+  <div id="pg-imp" class="pg">
+    <div class="info">
+      <strong>Format Excel/CSV tagihan (7 kolom):</strong><br>
+      <code>no_hp</code> · <code>nama_produk</code> · <code>qty</code> · <code>harga</code> · <code>fee_jastip</code> · <code>total(skip)</code> · <code>status</code><br><br>
+      Status: <code>BELUM LUNAS</code> · <code>LUNAS</code> · <code>WL</code><br>
+      No HP yang sama → digabung jadi 1 tagihan. Upload ulang → update otomatis.
+    </div>
+    <div class="dz" onclick="document.getElementById('ord-csv').click()">
+      Klik untuk upload Excel/CSV tagihan
+      <div style="font-size:11px;color:#bbb;margin-top:5px">Di Excel: File → Save As → CSV</div>
+      <input type="file" id="ord-csv" accept=".csv" style="display:none" onchange="importOrdCSV(this)">
+    </div>
+    <div class="row">
+      <button class="btn g" onclick="exportCSV()">Ekspor semua ke CSV</button>
+      <button class="btn a" onclick="exportLunas()">Ekspor LUNAS saja</button>
+      <button class="btn" onclick="exportTpl()">Download template</button>
+    </div>
+    <div id="imp-log" class="info" style="display:none;font-family:monospace;font-size:12px;white-space:pre-wrap"></div>
+  </div>
+
+  <!-- PENGATURAN -->
+  <div id="pg-cfg" class="pg">
+    <div style="max-width:400px;display:flex;flex-direction:column;gap:11px">
+      <div><div class="lbl">Nama rekening (a.n)</div><input class="fi" id="cfg-nama" value="Ayu Tarviana Dewi"></div>
+      <div><div class="lbl">No rekening BCA</div><input class="fi" id="cfg-rek" value="1010785517"></div>
+      <div><div class="lbl">Pesan pembuka</div><textarea class="fi" id="cfg-salam" rows="2">Halo kak 👋
+Berikut rincian tagihan pesanan kakak:</textarea></div>
+      <div><div class="lbl">Pesan penutup</div><textarea class="fi" id="cfg-tutup" rows="2">Terima kasih ☺️🙏🏻</textarea></div>
+      <button class="btn g" onclick="simpanCfg()">Simpan pengaturan</button>
+      <button class="btn" onclick="previewCfg()">Preview pesan</button>
+      <div id="cfg-preview" style="display:none"><div class="pesan-box" id="cfg-preview-text"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETAIL -->
+<div class="ov" id="ov-det">
+  <div class="modal">
+    <h3 id="det-hp"></h3>
+    <div id="det-items"></div>
+    <div style="margin-top:9px;border-top:1px solid #eee;padding-top:9px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:#888">Total tagihan</span><span id="det-total" style="font-weight:500"></span></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0"><span style="color:#0F6E56">Sudah dibayar</span><span id="det-bayar" style="color:#0F6E56;font-weight:500"></span></div>
+      <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0;font-weight:600"><span style="color:#854F0B">Sisa tagihan</span><span id="det-sisa" style="color:#854F0B"></span></div>
+    </div>
+    <div id="det-hist" style="display:none;margin-top:9px">
+      <div class="lbl" style="margin-bottom:5px">Riwayat pembayaran</div>
+      <div id="det-hist-list"></div>
+    </div>
+    <div style="margin-top:9px">
+      <div class="lbl" style="margin-bottom:5px">Pesan WhatsApp</div>
+      <div class="pesan-box" id="det-pesan"></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn" onclick="closeOv('ov-det')">Tutup</button>
+      <button class="btn r" id="det-hapus">Hapus</button>
+      <button class="btn" id="det-salin">Salin pesan WA</button>
+      <button class="btn a" id="det-tagih">Kirim tagihan</button>
+      <button class="btn g" id="det-lunas">Tandai lunas</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL TAMBAH MANUAL -->
+<div class="ov" id="ov-add">
+  <div class="modal">
+    <h3>Tambah order manual</h3>
+    <div class="fg">
+      <div class="full"><div class="lbl">No HP pelanggan</div><input class="fi" id="add-hp" placeholder="62 823-..." oninput="sgAdd()" autocomplete="off"><div class="sg" id="add-sg"></div></div>
+      <div class="full"><div class="lbl">Nama pelanggan</div><input class="fi" id="add-nama" placeholder="Kak Rina"></div>
+      <div class="full"><div class="lbl">Nama produk</div><input class="fi" id="add-prod" placeholder="Nama buku..."></div>
+      <div><div class="lbl">Qty</div><input class="fi" id="add-qty" type="number" min="1" value="1"></div>
+      <div><div class="lbl">Harga (Rp)</div><input class="fi" id="add-hrg" type="number" min="0" placeholder="50000"></div>
+      <div><div class="lbl">Fee jastip (Rp)</div><input class="fi" id="add-fee" type="number" min="0" value="0"></div>
+      <div><div class="lbl">Status</div><select class="fi" id="add-st"><option value="BELUM LUNAS">Belum lunas</option><option value="WL">WL</option></select></div>
+    </div>
+    <div class="mfooter"><button class="btn" onclick="closeOv('ov-add')">Batal</button><button class="btn b" onclick="simpanAdd()">Simpan</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+const SB  = 'https://cygstxxdtvcjerkzrona.supabase.co';
+const KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5Z3N0eHhkdHZjamVya3pyb25hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3NDg2NDYsImV4cCI6MjA5NTMyNDY0Nn0.7H09H9l4AzZxE4qC5lFTT_rPbqjawrdHY3wapKSguOs';
+const HDR  = {'Content-Type':'application/json','apikey':KEY,'Authorization':'Bearer '+KEY,'Prefer':'return=representation'};
+const CFG_KEY = 'bj_cfg_v6';
+
+let cfg = loadCfg();
+let detailHP = null;
+
+// ═══════════════════════════════════════════
+// SUPABASE HELPERS
+// ═══════════════════════════════════════════
+async function GET(tbl, q=''){
+  const r = await fetch(`${SB}/rest/v1/${tbl}?${q}`,{headers:HDR});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function POST(tbl, body){
+  const r = await fetch(`${SB}/rest/v1/${tbl}`,{method:'POST',headers:HDR,body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function UPSERT(tbl, body){
+  const r = await fetch(`${SB}/rest/v1/${tbl}`,{
+    method:'POST',
+    headers:{...HDR,'Prefer':'resolution=merge-duplicates,return=representation'},
+    body:JSON.stringify(body)
+  });
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function DEL(tbl, q){
+  const r = await fetch(`${SB}/rest/v1/${tbl}?${q}`,{method:'DELETE',headers:HDR});
+  if(!r.ok) throw new Error(await r.text());
+}
+
+// ═══════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════
+function loadCfg(){
+  try{ return JSON.parse(localStorage.getItem(CFG_KEY))||defCfg(); }catch{ return defCfg(); }
+}
+function defCfg(){
+  return{nama:'Ayu Tarviana Dewi',rek:'1010785517',
+    salam:'Halo kak 👋\nBerikut rincian tagihan pesanan kakak:',
+    tutup:'Terima kasih ☺️🙏🏻'};
+}
+function saveCfg(c){ localStorage.setItem(CFG_KEY,JSON.stringify(c)); }
+
+// ═══════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════
+const rp  = n => 'Rp'+Number(n||0).toLocaleString('id-ID');
+const esc = s => String(s).replace(/'/g,"\\'");
+const toDigits = s => String(s||'').replace(/\D/g,'');
+
+function toast(msg, type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast on '+type;
+  clearTimeout(t._t); t._t=setTimeout(()=>t.className='toast',3000);
+}
+
+function normaliseStatus(raw){
+  if(!raw) return 'BELUM LUNAS';
+  const s=raw.trim().toUpperCase();
+  if(s==='LUNAS') return 'LUNAS';
+  if(s==='WL')    return 'WL';
+  if(s.includes('TAGIHAN')||s.includes('DIKIRIM')) return 'TAGIHAN DIKIRIM';
+  return 'BELUM LUNAS';
+}
+
+function parseCSVLine(line){
+  const res=[]; let cur='',inQ=false;
+  for(const c of line){
+    if(c==='"') inQ=!inQ;
+    else if(c===','&&!inQ){res.push(cur.trim());cur='';}
+    else cur+=c;
+  }
+  res.push(cur.trim());
+  return res;
+}
+
+function hitungTotal(items){
+  return (items||[]).filter(it=>!it.wl).reduce((s,it)=>s+it.qty*(it.harga+(it.fee||0)),0);
+}
+
+// Build pesan WA
+function buildPesan(order, dibayar){
+  const c = cfg;
+  const tagihItems = (order.items||[]).filter(it=>!it.wl&&!it.lunas);
+  const wlItems    = (order.items||[]).filter(it=>it.wl);
+  const total      = order.total_tagihan||0;
+  const sisa       = Math.max(0, total - dibayar);
+
+  const baris = tagihItems.map(it=>`${it.nama} \nRp${(it.harga+(it.fee||0)).toLocaleString('id-ID')} x ${it.qty}`).join('\n');
+
+  let totalLine = '';
+  if(dibayar>0 && sisa<total){
+    totalLine = `Total: ${rp(total)}\nSudah dibayar: ${rp(dibayar)}\nSisa pembayaran: ${rp(sisa)}`;
+  } else {
+    totalLine = `Total: ${rp(total)}`;
+  }
+
+  let wlLine = '';
+  if(wlItems.length>0){
+    wlLine = `\n\n${'─'.repeat(26)}\nDaftar WL kamu:\n${wlItems.map(it=>`* ${it.nama}`).join('\n')}\n_(akan dikonfirmasi ketersediaannya)_`;
+  }
+
+  return `${c.salam}\n${baris}\n\n${totalLine}\n\nPembayaran bisa melalui QRIS atau transfer ke:\n💳 BCA ${c.rek} a.n ${c.nama}\n\n${c.tutup}${wlLine}`;
+}
+
+function copyText(teks, btn){
+  const ori = btn?btn.textContent:'';
+  const ta  = document.createElement('textarea');
+  ta.value  = teks;
+  ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+  document.body.appendChild(ta); ta.focus(); ta.select();
+  try{ document.execCommand('copy'); if(btn){btn.textContent='Tersalin ✓';setTimeout(()=>btn.textContent=ori,2000);} }
+  catch{}
+  document.body.removeChild(ta);
+}
+
+// ═══════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════
+function goTab(id){
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('on',['orders','pay','hist','imp','cfg'][i]===id));
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
+  document.getElementById('pg-'+id).classList.add('on');
+  if(id==='orders') loadOrders();
+  if(id==='pay')   { loadPays(); loadAllOrdersForSuggest(); }
+  if(id==='hist')   loadHist();
+  if(id==='cfg')    loadCfgForm();
+}
+
+// ═══════════════════════════════════════════
+// ORDERS
+// ═══════════════════════════════════════════
+let allOrdersCache = [];
+let allPaysCache   = [];
+
+async function loadOrders(){
+  const tb = document.getElementById('tb-orders');
+  tb.innerHTML = `<tr><td colspan="8" class="empty"><span class="spin"></span>Memuat...</td></tr>`;
+  try{
+    const fs = document.getElementById('fs').value;
+    const fq = (document.getElementById('fq').value||'').toLowerCase();
+
+    // Ambil semua sekaligus
+    [allOrdersCache, allPaysCache] = await Promise.all([
+      GET('orders','select=hp,nama_pelanggan,items,total_tagihan,status&order=created_at.desc&limit=2000'),
+      GET('payments','select=hp,jumlah&limit=10000')
+    ]);
+
+    // Pay map: digits → total dibayar
+    const payMap = {};
+    allPaysCache.forEach(p=>{ const k=toDigits(p.hp); payMap[k]=(payMap[k]||0)+Number(p.jumlah); });
+
+    // Update stats
+    const total  = allOrdersCache.length;
+    const belum  = allOrdersCache.filter(o=>o.status!=='LUNAS').length;
+    const lunas  = allOrdersCache.filter(o=>o.status==='LUNAS').length;
+    const tagSum = allOrdersCache.filter(o=>o.status!=='LUNAS').reduce((s,o)=>{
+      const d=payMap[toDigits(o.hp)]||0;
+      return s+Math.max(0,(o.total_tagihan||0)-d);
+    },0);
+    document.getElementById('st0').textContent = total;
+    document.getElementById('st1').textContent = belum;
+    document.getElementById('st2').textContent = lunas;
+    document.getElementById('st3').textContent = rp(tagSum);
+
+    // Filter
+    let rows = allOrdersCache.filter(o=>{
+      const ms = !fs||o.status===fs;
+      const mq = !fq||o.hp.toLowerCase().includes(fq)||(o.nama_pelanggan||'').toLowerCase().includes(fq);
+      return ms&&mq;
+    });
+
+    if(!rows.length){ tb.innerHTML=`<tr><td colspan="8" class="empty">Tidak ada data.</td></tr>`; return; }
+
+    tb.innerHTML = rows.map(o=>{
+      const k       = toDigits(o.hp);
+      const dibayar = payMap[k]||0;
+      const total   = o.total_tagihan||0;
+      const sisa    = Math.max(0,total-dibayar);
+      const isL     = o.status==='LUNAS';
+      const bc      = isL?'bk-l':o.status==='TAGIHAN DIKIRIM'?'bk-t':o.status==='WL'?'bk-w':'bk-b';
+      const prods   = (o.items||[]).slice(0,2).map(it=>`<div style="font-size:12px">${it.wl?'⏳ ':''}${it.nama}</div>`).join('')
+                    + (o.items&&o.items.length>2?`<div style="font-size:11px;color:#aaa">+${o.items.length-2} lainnya</div>`:'');
+      const wlCount = (o.items||[]).filter(it=>it.wl).length;
+      const wlBadge = wlCount>0?`<span class="bk bk-w" style="margin-left:5px">WL ${wlCount}</span>`:'';
+      const aksi    = isL
+        ? `<button class="btn" onclick="openDet('${esc(o.hp)}')">Detail</button>`
+        : `<button class="btn a" onclick="kirimTagih('${esc(o.hp)}')">Tagih</button>
+           <button class="btn g" onclick="tandaiLunas('${esc(o.hp)}')">Lunas</button>
+           <button class="btn" onclick="openDet('${esc(o.hp)}')">Detail</button>`;
+      return `<tr>
+        <td style="font-family:monospace;font-size:12px">${o.hp}</td>
+        <td>${o.nama_pelanggan||'—'}${wlBadge}</td>
+        <td>${prods}</td>
+        <td>${rp(total)}</td>
+        <td style="color:#0F6E56">${dibayar>0?rp(dibayar):'—'}</td>
+        <td style="font-weight:500;color:${sisa>0&&!isL?'#854F0B':'#aaa'}">${isL?'<span style="color:#0F6E56">Lunas</span>':rp(sisa)}</td>
+        <td><span class="bk ${bc}">${o.status}</span></td>
+        <td><div class="acts">${aksi}</div></td>
+      </tr>`;
+    }).join('');
+  }catch(err){
+    tb.innerHTML=`<tr><td colspan="8" class="empty">Error: ${err.message}</td></tr>`;
+    toast('Gagal memuat: '+err.message,'er');
+  }
+}
+
+// ═══════════════════════════════════════════
+// DETAIL ORDER
+// ═══════════════════════════════════════════
+async function openDet(hp){
+  detailHP = hp;
+  document.getElementById('det-hp').textContent = hp;
+  document.getElementById('det-pesan').textContent = 'Memuat...';
+  document.getElementById('ov-det').classList.add('on');
+
+  try{
+    const [orders, pays] = await Promise.all([
+      GET('orders',`hp=eq.${encodeURIComponent(hp)}`),
+      GET('payments',`hp=eq.${encodeURIComponent(hp)}&order=created_at.asc`)
+    ]);
+    const o = orders[0]; if(!o) return;
+    const dibayar = pays.reduce((s,p)=>s+Number(p.jumlah),0);
+    const sisa    = Math.max(0,(o.total_tagihan||0)-dibayar);
+
+    // Items
+    document.getElementById('det-items').innerHTML = (o.items||[]).map(it=>`
+      <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid #eee">
+        <span>${it.wl?'<span class="bk bk-w" style="margin-right:4px">WL</span>':''}${it.nama} ×${it.qty}</span>
+        <span style="${it.wl?'color:#aaa;text-decoration:line-through':''}">${rp(it.qty*(it.harga+(it.fee||0)))}</span>
+      </div>`).join('');
+
+    document.getElementById('det-total').textContent = rp(o.total_tagihan||0);
+    document.getElementById('det-bayar').textContent = rp(dibayar);
+    document.getElementById('det-sisa').textContent  = rp(sisa);
+
+    // Riwayat bayar
+    const dh = document.getElementById('det-hist');
+    if(pays.length){
+      dh.style.display='block';
+      document.getElementById('det-hist-list').innerHTML = pays.map(p=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #eee;font-size:12px">
+          <span><b>${rp(p.jumlah)}</b> · ${p.metode||''} · ${p.tgl||''} ${p.catatan?'· '+p.catatan:''}</span>
+          <button class="btn r" style="font-size:11px;padding:2px 8px" onclick="hapusBayar('${p.id}','${esc(hp)}')">Hapus</button>
+        </div>`).join('');
+    } else dh.style.display='none';
+
+    // Pesan WA
+    const pesan = buildPesan(o, dibayar);
+    document.getElementById('det-pesan').textContent = pesan;
+
+    const isL = o.status==='LUNAS';
+    document.getElementById('det-tagih').disabled = isL;
+    document.getElementById('det-lunas').disabled  = isL;
+    document.getElementById('det-salin').onclick   = ()=>copyText(pesan, document.getElementById('det-salin'));
+    document.getElementById('det-tagih').onclick   = ()=>{ closeOv('ov-det'); kirimTagih(hp); };
+    document.getElementById('det-lunas').onclick   = ()=>{ tandaiLunas(hp); closeOv('ov-det'); };
+    document.getElementById('det-hapus').onclick   = ()=>hapusOrder(hp);
+  }catch(err){ toast('Error: '+err.message,'er'); }
+}
+
+// ═══════════════════════════════════════════
+// ACTIONS
+// ═══════════════════════════════════════════
+async function kirimTagih(hp){
+  try{
+    const [orders,pays] = await Promise.all([
+      GET('orders',`hp=eq.${encodeURIComponent(hp)}`),
+      GET('payments',`hp=eq.${encodeURIComponent(hp)}`)
+    ]);
+    const o = orders[0]; if(!o||o.status==='LUNAS') return;
+    const dibayar = pays.reduce((s,p)=>s+Number(p.jumlah),0);
+    const pesan   = buildPesan(o, dibayar);
+    const noHP    = toDigits(hp);
+    window.open(`https://wa.me/${noHP}?text=${encodeURIComponent(pesan)}`,'_blank');
+    await UPSERT('orders',{hp:o.hp,nama_pelanggan:o.nama_pelanggan,items:o.items,total_tagihan:o.total_tagihan,status:'TAGIHAN DIKIRIM',updated_at:new Date().toISOString()});
+    await POST('history',{hp,pelanggan:o.nama_pelanggan,aksi:'TAGIHAN DIKIRIM',detail:pesan});
+    toast(`WA terbuka → ${o.nama_pelanggan||hp}`);
+    loadOrders();
+  }catch(err){ toast('Error: '+err.message,'er'); }
+}
+
+async function tandaiLunas(hp){
+  try{
+    const orders = await GET('orders',`hp=eq.${encodeURIComponent(hp)}`);
+    const o = orders[0]; if(!o) return;
+    await UPSERT('orders',{hp:o.hp,nama_pelanggan:o.nama_pelanggan,items:o.items,total_tagihan:o.total_tagihan,status:'LUNAS',updated_at:new Date().toISOString()});
+    await POST('history',{hp,pelanggan:o.nama_pelanggan,aksi:'LUNAS',detail:''});
+    toast(`${hp} ditandai lunas ✓`);
+    loadOrders();
+  }catch(err){ toast('Error: '+err.message,'er'); }
+}
+
+async function hapusOrder(hp){
+  if(!confirm(`Hapus order ${hp}?`)) return;
+  try{
+    await DEL('orders',`hp=eq.${encodeURIComponent(hp)}`);
+    closeOv('ov-det'); toast('Order dihapus'); loadOrders();
+  }catch(err){ toast('Error: '+err.message,'er'); }
+}
+
+// ═══════════════════════════════════════════
+// TAMBAH MANUAL
+// ═══════════════════════════════════════════
+let allOrdersSuggest = [];
+
+async function loadAllOrdersForSuggest(){
+  try{ allOrdersSuggest = await GET('orders','select=hp,nama_pelanggan&limit=2000'); }catch{}
+}
+
+function openAdd(){ document.getElementById('ov-add').classList.add('on'); }
+function closeOv(id){ document.getElementById(id).classList.remove('on'); }
+
+function sgAdd(){
+  const v = document.getElementById('add-hp').value.trim().toLowerCase();
+  const sg = document.getElementById('add-sg');
+  if(!v||v.length<2){sg.style.display='none';return;}
+  const m = allOrdersSuggest.filter(o=>o.hp.toLowerCase().includes(v)||(o.nama_pelanggan||'').toLowerCase().includes(v)).slice(0,5);
+  if(!m.length){sg.style.display='none';return;}
+  sg.style.display='block';
+  sg.innerHTML=m.map(o=>`<div class="sg-item" onclick="fillAdd('${esc(o.hp)}','${esc(o.nama_pelanggan||'')}')">
+    <b>${o.hp}</b> <span style="color:#888">${o.nama_pelanggan||''}</span></div>`).join('');
+}
+function fillAdd(hp,nama){
+  document.getElementById('add-hp').value=hp;
+  document.getElementById('add-nama').value=nama;
+  document.getElementById('add-sg').style.display='none';
+}
+
+async function simpanAdd(){
+  const hp   = document.getElementById('add-hp').value.trim();
+  const nama = document.getElementById('add-nama').value.trim();
+  const prod = document.getElementById('add-prod').value.trim();
+  const qty  = parseInt(document.getElementById('add-qty').value)||1;
+  const hrg  = parseFloat(document.getElementById('add-hrg').value)||0;
+  const fee  = parseFloat(document.getElementById('add-fee').value)||0;
+  const st   = document.getElementById('add-st').value;
+  if(!hp||!prod||!hrg){ toast('Lengkapi semua field','er'); return; }
+
+  const newItem = {nama:prod,qty,harga:hrg,fee,wl:st==='WL',lunas:false};
+  try{
+    const existing = await GET('orders',`hp=eq.${encodeURIComponent(hp)}`);
+    if(existing.length){
+      const o   = existing[0];
+      const items = [...(o.items||[]), newItem];
+      const tot = hitungTotal(items);
+      await UPSERT('orders',{hp:o.hp,nama_pelanggan:o.nama_pelanggan||nama,items,total_tagihan:tot,status:o.status,updated_at:new Date().toISOString()});
+      toast('Item ditambahkan ke order '+hp);
+    } else {
+      const items = [newItem];
+      await UPSERT('orders',{hp,nama_pelanggan:nama||hp,items,total_tagihan:hitungTotal(items),status:st==='WL'?'WL':'BELUM LUNAS'});
+      await UPSERT('customers',{hp,nama:nama||hp,kota:'',note:''});
+      toast('Order baru dibuat: '+hp);
+    }
+    closeOv('ov-add');
+    ['add-hp','add-nama','add-prod','add-hrg'].forEach(x=>document.getElementById(x).value='');
+    document.getElementById('add-qty').value='1'; document.getElementById('add-fee').value='0';
+    document.getElementById('add-sg').style.display='none';
+    loadOrders();
+  }catch(err){ toast('Error: '+err.message,'er'); }
+}
+
+// ═══════════════════════════════════════════
+// PEMBAYARAN
+// ═══════════════════════════════════════════
+function switchPayTab(t){
+  document.getElementById('pp-manual').style.display = t==='manual'?'block':'none';
+  document.getElementById('pp-upload').style.display = t==='upload'?'flex':'none';
+  document.getElementById('pt-manual').className = 'btn'+(t==='manual'?' b':'');
+  document.getElementById('pt-upload').className = 'btn'+(t==='upload'?' b':'');
+}
+
+async function cariOrderUtk(){
+  const v  = document.getElementById('pay-hp').value.trim().toLowerCase();
+  const sg = document.getElementById('pay-sg');
+  document.getElementById('pay-info').style.display='none';
+  if(!v||v.length<2){sg.style.display='none';return;}
+  const m = allOrdersSuggest.filter(o=>o.hp.toLowerCase().includes(v)||(o.nama_pelanggan||'').toLowerCase().includes(v)).slice(0,6);
+  if(!m.length){sg.style.display='none';return;}
+  sg.style.display='block';
+  sg.innerHTML=m.map(o=>`<div class="sg-item" onclick="pilihOrderUtk('${esc(o.hp)}')">
+    <b>${o.hp}</b> <span style="color:#888">${o.nama_pelanggan||''}</span></div>`).join('');
+}
+
+async function pilihOrderUtk(hp){
+  document.getElementById('pay-hp').value = hp;
+  document.getElementById('pay-sg').style.display='none';
+  try{
+    const [orders,pays] = await Promise.all([
+      GET('orders',`hp=eq.${encodeURIComponent(hp)}`),
+      GET('payments',`hp=eq.${encodeURIComponent(hp)}`)
+    ]);
+    const o = orders[0]; if(!o) return;
+    const dibayar = pays.reduce((s,p)=>s+Number(p.jumlah),0);
+    const sisa    = Math.max(0,(o.total_tagihan||0)-dibayar);
+    const el = document.getElementById('pay-info');
+    el.style.display='block';
+    el.innerHTML=`<b>${o.nama_pelanggan||hp}</b> · ${hp}<br>Total: ${rp(o.total_tagihan||0)} &nbsp;·&nbsp; Dibayar: <span style="color:#0F6E56">${rp(dibayar)}</span> &nbsp;·&nbsp; Sisa: <b style="color:#854F0B">${rp(sisa)}</b>`;
+    document.getElementById('pay-jml').value = sisa||'';
+  }catch{}
+}
+
+async function simpanBayar(){
+  const hp     = document.getElementById('pay-hp').value.trim();
+  const jumlah = parseFloat(document.getElementById('pay-jml').value)||0;
+  const metode = document.getElementById('pay-met').value;
+  const tgl    = document.getElementById('pay-tgl').value||new Date().toISOString().slice(0,10);
+  const cat    = document.getElementById('pay-cat').value.trim();
+  if(!hp||!jumlah){ toast('No HP dan nominal wajib','er'); return; }
+  try{
+    const orders = await GET('orders',`hp=eq.${encodeURIComponent(hp)}`);
+    if(!orders.length){ toast('No HP tidak ditemukan','er'); return; }
+    const o = orders[0];
+    await POST('payments',{hp,jumlah,metode,tgl,catatan:cat});
+    const pays   = await GET('payments',`hp=eq.${encodeURIComponent(hp)}`);
+    const dibayar= pays.reduce((s,p)=>s+Number(p.jumlah),0);
+    const sisa   = Math.max(0,(o.total_tagihan||0)-dibayar);
+    if(sisa<=0 && o.status!=='LUNAS'){
+      await UPSERT('orders',{hp:o.hp,nama_pelanggan:o.nama_pelanggan,items:o.items,total_tagihan:o.total_tagihan,status:'LUNAS',updated_at:new Date().toISOString()});
+      await POST('history',{hp,pelanggan:o.nama_pelanggan,aksi:'LUNAS (bayar lunas)',detail:''});
+      toast(`✓ Pembayaran disimpan — ${hp} otomatis LUNAS`);
+    } else {
+      toast(`✓ ${rp(jumlah)} disimpan. Sisa: ${rp(sisa)}`);
+    }
+    resetPayForm(); loadPays(); loadOrders();
+  }catch(err){ toast('Error: '+err.message,'er'); }
+}
+
+async function hapusBayar(id, hp){
+  if(!confirm('Hapus catatan pembayaran ini?')) return;
+  try{
+    await DEL('payments',`id=eq.${id}`);
+    const [orders,pays] = await Promise.all([
+      GET('orders',`hp=eq.${encodeURIComponent(hp)}`),
+      GET('payments',`hp=eq.${encodeURIComponent(hp)}`)
+    ]);
+    const o = orders[0];
+    if(o && o.status==='LUNAS'){
+      const dibayar = pays.reduce((s,p)=>s+Number(p.jumlah),0);
+      if(dibayar<(o.total_tagihan||0)){
+        await UPSERT('orders',{hp:o.hp,nama_pelanggan:o.nama_pelanggan,items:o.items,total_tagihan:o.total_tagihan,status:'BELUM LUNAS',updated_at:new Date().toISOString()});
+      }
+    }
+    toast('Pembayaran dihapus'); loadPays(); loadOrders();
+    if(detailHP===hp) openDet(hp);
+  }catch(err){ toast('Error: '+err.message,'er'); }
+}
+
+async function loadPays(){
+  const tb = document.getElementById('tb-pays');
+  tb.innerHTML=`<tr><td colspan="7" class="empty"><span class="spin"></span>Memuat...</td></tr>`;
+  try{
+    const pays = await GET('payments','order=created_at.desc&limit=200');
+    if(!pays.length){tb.innerHTML=`<tr><td colspan="7" class="empty">Belum ada pembayaran.</td></tr>`;return;}
+    const hps  = [...new Set(pays.map(p=>p.hp))];
+    const ords = await GET('orders',`hp=in.(${hps.map(h=>`"${h}"`).join(',')})&select=hp,nama_pelanggan`);
+    const nm   = {}; ords.forEach(o=>nm[o.hp]=o.nama_pelanggan);
+    tb.innerHTML=pays.map(p=>`<tr>
+      <td style="font-family:monospace;font-size:12px">${p.hp}</td>
+      <td>${nm[p.hp]||'—'}</td>
+      <td style="color:#0F6E56;font-weight:500">${rp(p.jumlah)}</td>
+      <td>${p.metode||'—'}</td>
+      <td>${p.tgl||'—'}</td>
+      <td>${p.catatan||'—'}</td>
+      <td><button class="btn r" style="font-size:11px;padding:2px 8px" onclick="hapusBayar('${p.id}','${esc(p.hp)}')">Hapus</button></td>
+    </tr>`).join('');
+  }catch(err){tb.innerHTML=`<tr><td colspan="7" class="empty">Error: ${err.message}</td></tr>`;}
+}
+
+async function importPayCSV(input){
+  const file=input.files[0]; if(!file) return;
+  const log=document.getElementById('pay-log');
+  log.style.display='block'; log.textContent='Memproses...';
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean).slice(1);
+    let ok=0,skip=0;
+    for(const line of lines){
+      const p=parseCSVLine(line);
+      const hp=String(p[0]||'').trim();
+      const jumlah=parseFloat(p[1])||0;
+      const tgl=String(p[2]||'').trim()||new Date().toISOString().slice(0,10);
+      const metode=String(p[3]||'Transfer BCA').trim();
+      if(!hp||!jumlah){skip++;continue;}
+      try{
+        const ords=await GET('orders',`hp=eq.${encodeURIComponent(hp)}`);
+        if(!ords.length){skip++;continue;}
+        await POST('payments',{hp,jumlah,metode,tgl,catatan:'Import CSV'});
+        const pays=await GET('payments',`hp=eq.${encodeURIComponent(hp)}`);
+        const dibayar=pays.reduce((s,p)=>s+Number(p.jumlah),0);
+        const o=ords[0];
+        if(Math.max(0,(o.total_tagihan||0)-dibayar)<=0&&o.status!=='LUNAS'){
+          await UPSERT('orders',{hp:o.hp,nama_pelanggan:o.nama_pelanggan,items:o.items,total_tagihan:o.total_tagihan,status:'LUNAS',updated_at:new Date().toISOString()});
+        }
+        ok++;
+      }catch{skip++;}
+    }
+    log.textContent=`✅ Import pembayaran selesai\n+ ${ok} disimpan\n✗ ${skip} dilewati`;
+    toast(`Import: ${ok} pembayaran`); input.value='';
+    loadPays(); loadOrders();
+  };
+  reader.readAsText(file);
+}
+
+function resetPayForm(){
+  ['pay-hp','pay-jml','pay-cat','pay-tgl'].forEach(x=>document.getElementById(x).value='');
+  document.getElementById('pay-info').style.display='none';
+  document.getElementById('pay-sg').style.display='none';
+}
+
+// ═══════════════════════════════════════════
+// HISTORI
+// ═══════════════════════════════════════════
+async function loadHist(){
+  const q   = (document.getElementById('hq').value||'').toLowerCase();
+  const el  = document.getElementById('hist-list');
+  const emp = document.getElementById('hist-empty');
+  el.innerHTML=`<div class="empty"><span class="spin"></span>Memuat...</div>`;
+  try{
+    let hist=await GET('history','order=created_at.desc&limit=300');
+    if(q) hist=hist.filter(h=>h.hp.toLowerCase().includes(q)||(h.pelanggan||'').toLowerCase().includes(q));
+    if(!hist.length){el.innerHTML='';emp.style.display='block';return;}
+    emp.style.display='none';
+    const bc={'TAGIHAN DIKIRIM':'bk-t','LUNAS':'bk-l','LUNAS (bayar lunas)':'bk-l'};
+    el.innerHTML=hist.map(h=>`<div style="padding:9px 12px;border-bottom:1px solid #eee">
+      <span style="font-family:monospace;font-size:12px">${h.hp}</span>
+      <span style="margin-left:7px">${h.pelanggan||''}</span>
+      <span class="bk ${bc[h.aksi]||'bk-b'}" style="margin-left:7px">${h.aksi}</span>
+      <div style="font-size:11px;color:#888;margin-top:2px">${new Date(h.created_at).toLocaleString('id-ID')}</div>
+      ${h.detail?`<pre style="margin-top:5px;font-size:11px;color:#666;white-space:pre-wrap;background:#fafaf8;padding:7px;border-radius:7px;max-height:80px;overflow:auto;border:1px solid #eee;font-family:system-ui">${h.detail}</pre>`:''}
+    </div>`).join('');
+  }catch(err){el.innerHTML=`<div class="empty">Error: ${err.message}</div>`;}
+}
+function hapusHist(){
+  if(!confirm('Hapus semua histori?')) return;
+  DEL('history','id=neq.00000000-0000-0000-0000-000000000000').then(()=>{loadHist();toast('Histori dihapus');}).catch(e=>toast(e.message,'er'));
+}
+
+// ═══════════════════════════════════════════
+// IMPORT EXCEL/CSV TAGIHAN
+// ═══════════════════════════════════════════
+async function importOrdCSV(input){
+  const file=input.files[0]; if(!file) return;
+  const log=document.getElementById('imp-log');
+  log.style.display='block'; log.textContent='Memproses CSV...';
+
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(lines.length<2){toast('CSV kosong','er');input.value='';return;}
+
+    // ── Parse: group by no HP ──────────────────────────────
+    // Kolom: no_hp | nama_produk | qty | harga | fee_jastip | total(skip) | status
+    const grouped={};  // key=digits, value={hp, items:[]}
+    lines.slice(1).forEach(line=>{
+      const c=parseCSVLine(line);
+      const hp       = String(c[0]||'').trim();
+      const nama     = String(c[1]||'').trim();
+      const qty      = parseFloat(c[2])||1;
+      const harga    = parseFloat(c[3])||0;
+      const fee      = parseFloat(c[4])||0;
+      // c[5] = total dari excel → DIABAIKAN
+      const status   = normaliseStatus(String(c[6]||'').trim());
+      if(!hp||!nama||qty<=0) return;
+      const key=toDigits(hp); if(!key||key.length<6) return;
+      if(!grouped[key]) grouped[key]={hp, items:[]};
+      grouped[key].items.push({nama, qty, harga, fee, wl:status==='WL', lunas:status==='LUNAS'});
+    });
+
+    const imported=Object.values(grouped);
+    if(!imported.length){toast('Tidak ada data valid','er');input.value='';return;}
+
+    // ── Ambil semua orders & payments dari DB sekaligus ──
+    let dbOrders=[], dbPays=[];
+    try{
+      [dbOrders,dbPays]=await Promise.all([
+        GET('orders','select=hp,nama_pelanggan,items,total_tagihan,status&limit=5000'),
+        GET('payments','select=hp,jumlah&limit=20000')
+      ]);
+    }catch(err){toast('Gagal ambil data DB: '+err.message,'er');return;}
+
+    // Map: digits → order dari DB
+    const dbMap={};
+    dbOrders.forEach(o=>{ dbMap[toDigits(o.hp)]=o; });
+
+    // Map: digits → total dibayar
+    const payMap={};
+    dbPays.forEach(p=>{ const k=toDigits(p.hp); payMap[k]=(payMap[k]||0)+Number(p.jumlah); });
+
+    let added=0, updated=0, lunasAuto=0;
+
+    for(const imp of imported){
+      const key       = toDigits(imp.hp);
+      const nonWL     = imp.items.filter(it=>!it.wl);
+      const semuaWL   = nonWL.length===0;
+      const totalBaru = nonWL.reduce((s,it)=>s+it.qty*(it.harga+(it.fee||0)),0);
+      const dibayar   = payMap[key]||0;
+      const sisa      = Math.max(0,totalBaru-dibayar);
+      const lebih     = Math.max(0,dibayar-totalBaru);
+
+      const existing  = dbMap[key];
+
+      // Status baru
+      let newStatus;
+      if(semuaWL)                                newStatus='WL';
+      else if(lebih>0||(sisa<=0&&totalBaru>0))   newStatus='LUNAS';
+      else if(existing)                          newStatus=existing.status==='WL'?'BELUM LUNAS':existing.status;
+      else                                       newStatus='BELUM LUNAS';
+
+      // Pakai hp dari DB jika sudah ada (jaga format asli)
+      const hpFinal = existing?existing.hp:imp.hp;
+      const namaFinal = existing?existing.nama_pelanggan:imp.hp;
+
+      try{
+        await UPSERT('orders',{
+          hp:          hpFinal,
+          nama_pelanggan: namaFinal,
+          items:       imp.items,
+          total_tagihan: totalBaru,
+          status:      newStatus,
+          updated_at:  new Date().toISOString()
+        });
+
+        if(!existing){
+          await UPSERT('customers',{hp:hpFinal,nama:hpFinal,kota:'',note:''});
+          added++;
+        } else {
+          updated++;
+        }
+
+        if((lebih>0||sisa<=0)&&totalBaru>0&&existing&&existing.status!=='LUNAS'){
+          lunasAuto++;
+          await POST('history',{hp:hpFinal,pelanggan:namaFinal,aksi:'LUNAS (import CSV)',detail:''});
+        }
+      }catch(err){
+        console.error('Error upsert',hpFinal,err);
+      }
+    }
+
+    log.textContent=
+      `✅ Import selesai\n`+
+      `─────────────────────\n`+
+      `+ ${added} order baru\n`+
+      `↻ ${updated} order diperbarui\n`+
+      `✓ ${lunasAuto} otomatis LUNAS`;
+    toast(`Import: ${added} baru, ${updated} diperbarui`);
+    input.value='';
+    loadOrders();
+  };
+  reader.readAsText(file);
+}
+
+// ═══════════════════════════════════════════
+// EXPORT
+// ═══════════════════════════════════════════
+function dlCSV(content,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type:'text/csv'}));
+  a.download=name; a.click();
+}
+async function exportCSV(){
+  const ords=await GET('orders','order=created_at.desc');
+  const pays=await GET('payments','select=hp,jumlah&limit=20000');
+  const pm={}; pays.forEach(p=>{const k=toDigits(p.hp);pm[k]=(pm[k]||0)+Number(p.jumlah);});
+  const hdr='no_hp,nama_pelanggan,nama_produk,qty,harga,fee_jastip,status_item,total_order,dibayar,sisa\n';
+  const body=ords.flatMap(o=>{
+    const d=pm[toDigits(o.hp)]||0;
+    const s=Math.max(0,(o.total_tagihan||0)-d);
+    return (o.items||[]).map(it=>[o.hp,o.nama_pelanggan,it.nama,it.qty,it.harga,it.fee||0,it.wl?'WL':it.lunas?'LUNAS':'BELUM LUNAS',o.total_tagihan||0,d,s].join(','));
+  }).join('\n');
+  dlCSV(hdr+body,'billing-semua.csv'); toast('CSV diunduh');
+}
+async function exportLunas(){
+  const ords=await GET('orders','status=eq.LUNAS');
+  const hdr='no_hp,nama_pelanggan,total_tagihan\n';
+  const body=ords.map(o=>[o.hp,o.nama_pelanggan,o.total_tagihan||0].join(',')).join('\n');
+  dlCSV(hdr+body,'billing-lunas.csv'); toast('CSV lunas diunduh');
+}
+function exportTpl(){
+  dlCSV(
+    'no_hp,nama_produk,qty,harga,fee_jastip,total,status\n'+
+    '62 856-9255-9250,[UB] Holiday sticker book,1,45000,10000,55000,BELUM LUNAS\n'+
+    '62 856-9255-9250,[UB] Lets learn WORD FAMILIES,1,35000,10000,45000,BELUM LUNAS\n'+
+    '62 856-9255-9250,On the go sticker book,1,40000,10000,50000,WL\n',
+    'template-billing.csv'
+  ); toast('Template diunduh');
+}
+
+// ═══════════════════════════════════════════
+// PENGATURAN
+// ═══════════════════════════════════════════
+function loadCfgForm(){
+  cfg=loadCfg();
+  document.getElementById('cfg-nama').value=cfg.nama||'';
+  document.getElementById('cfg-rek').value=cfg.rek||'';
+  document.getElementById('cfg-salam').value=cfg.salam||'';
+  document.getElementById('cfg-tutup').value=cfg.tutup||'';
+}
+function simpanCfg(){
+  cfg={
+    nama:document.getElementById('cfg-nama').value.trim(),
+    rek:document.getElementById('cfg-rek').value.trim(),
+    salam:document.getElementById('cfg-salam').value.trim(),
+    tutup:document.getElementById('cfg-tutup').value.trim()
+  };
+  saveCfg(cfg); toast('Pengaturan disimpan ✓');
+}
+function previewCfg(){
+  const contoh={
+    hp:'62 856-9255-9250',
+    nama_pelanggan:'Kak Sari',
+    items:[
+      {nama:'[UB] Holiday sticker book',qty:1,harga:45000,fee:10000,wl:false,lunas:false},
+      {nama:'[UB] Lets learn WORD FAMILIES',qty:1,harga:35000,fee:10000,wl:false,lunas:false},
+      {nama:'On the go sticker book',qty:1,harga:40000,fee:10000,wl:true,lunas:false}
+    ],
+    total_tagihan:110000
+  };
+  const el=document.getElementById('cfg-preview');
+  document.getElementById('cfg-preview-text').textContent=buildPesan(contoh,50000);
+  el.style.display=el.style.display==='none'?'block':'none';
+}
+
+// ═══════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════
+document.querySelectorAll('.ov').forEach(ov=>ov.addEventListener('click',ev=>{if(ev.target===ov)ov.classList.remove('on');}));
+document.addEventListener('click',ev=>{
+  ['add-sg','pay-sg'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&!el.contains(ev.target))el.style.display='none';
+  });
+});
+
+cfg=loadCfg();
+switchPayTab('manual');
+loadOrders();
+loadAllOrdersForSuggest();
+</script>
+</body>
+</html>
